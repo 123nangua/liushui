@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>智析流水 - 智能记账演示版</title>
+    <!-- 引入 Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 ECharts 和 Font Awesome -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+        /* 保留一些自定义样式 */
+        #pieChart { height: 250px; width: 100%; }
+        .bill-item:hover { background-color: #f9fafb; }
+    </style>
+</head>
+<body class="bg-[#f0f4f8] p-5">
+<div class="container mx-auto max-w-3xl">
+    <!-- 头部卡片 -->
+    <div class="bg-white rounded-3xl p-6 mb-6 shadow-sm">
+        <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 bg-blue-500 rounded-2xl flex items-center justify-center text-white">
+                <i class="fas fa-wallet text-lg"></i>
+            </div>
+            <h1 class="text-2xl font-bold text-gray-800">智析流水</h1>
+        </div>
+        <div class="flex items-baseline gap-2">
+            <span class="text-4xl font-bold text-green-700">¥<span id="totalExpense">0</span></span>
+            <span class="text-gray-500">本月支出</span>
+        </div>
+        <!-- 月度称号 -->
+        <div class="flex items-center gap-2 mt-3">
+            <span class="text-lg font-medium text-blue-600">🏅 本月称号：</span>
+            <span class="text-lg font-semibold" id="monthlyTitle">新手记账人</span>
+            <i class="fas fa-question-circle text-gray-400" title="称号规则：根据上个月的账单数据生成，交通类最高→风火轮小能手，餐饮类最高→美食探险家，购物类最高→剁手党领袖，学习类最高→学霸の日常，娱乐类最高→派对动物，总支出低于平均值→省钱小能手，记账次数大于20次→自律记账人"></i>
+        </div>
+        <div class="text-sm text-gray-400 mt-2 flex items-center gap-1">
+            <i class="fas fa-info-circle text-xs"></i>
+            <span>数据存储于浏览器，刷新后不丢失</span>
+        </div>
+    </div>
+
+    <!-- 统计卡片 -->
+    <div class="flex gap-4 mb-6">
+        <div class="bg-white rounded-2xl p-5 flex-1 text-center shadow-sm">
+            <div class="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                <i class="fas fa-receipt text-xl text-blue-500"></i>
+            </div>
+            <div class="text-sm text-gray-500 mb-1">账单数</div>
+            <div class="text-2xl font-bold text-gray-800" id="billCount">0</div>
+        </div>
+        <div class="bg-white rounded-2xl p-5 flex-1 text-center shadow-sm">
+            <div class="w-12 h-12 bg-green-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                <i class="fas fa-chart-line text-xl text-green-500"></i>
+            </div>
+            <div class="text-sm text-gray-500 mb-1">日均支出</div>
+            <div class="text-2xl font-bold text-gray-800" id="avgExpense">¥0</div>
+        </div>
+        <div class="bg-white rounded-2xl p-5 flex-1 text-center shadow-sm">
+            <div class="w-12 h-12 bg-orange-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                <i class="fas fa-tag text-xl text-orange-500"></i>
+            </div>
+            <div class="text-sm text-gray-500 mb-1">最多类别</div>
+            <div class="text-2xl font-bold text-gray-800" id="topCategory">-</div>
+        </div>
+    </div>
+
+    <!-- 图表卡片 -->
+    <div class="bg-white rounded-2xl p-6 mb-6 shadow-sm">
+        <div class="font-semibold mb-5 text-lg flex items-center gap-2 text-gray-800">
+            <i class="fas fa-chart-pie text-blue-500"></i>
+            <span>支出构成（按类别）</span>
+        </div>
+        <div id="pieChart"></div>
+    </div>
+
+    <!-- 账单列表 -->
+    <div class="bg-white rounded-2xl p-6 shadow-sm">
+        <div class="flex justify-between mb-4">
+            <span class="font-semibold text-gray-800">近期账单</span>
+            <span class="text-gray-400 text-sm">点击编辑/删除</span>
+        </div>
+        <div id="billListContainer"></div>
+        <div id="emptyMsg" class="text-center py-10 text-gray-400">
+            暂无账单，点击右下角➕添加
+        </div>
+    </div>
+</div>
+
+<!-- 添加账单按钮 -->
+<button class="fixed bottom-8 right-8 bg-blue-500 w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl shadow-lg cursor-pointer border-0 z-50 hover:bg-blue-600 transition-colors" id="addBtn">
+    <i class="fas fa-plus"></i>
+</button>
+
+<!-- 家园按钮 -->
+<button class="fixed bottom-8 left-8 bg-green-500 w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl shadow-lg cursor-pointer border-0 z-50 hover:bg-green-600 transition-colors" id="homeBtn">
+    <i class="fas fa-home"></i>
+</button>
+
+<!-- 账单模态框 -->
+<div id="modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-3xl w-[85%] max-w-[350px] p-6 shadow-xl">
+        <h3 id="modalTitle" class="text-xl font-semibold mb-5 text-gray-800">添加账单</h3>
+        <input type="text" id="desc" placeholder="消费项目 (例: 午餐)" autocomplete="off" class="w-full p-4 mb-4 border border-gray-100 rounded-2xl text-lg bg-gray-50">
+        <input type="number" id="amount" placeholder="金额 (¥)" step="0.01" class="w-full p-4 mb-4 border border-gray-100 rounded-2xl text-lg bg-gray-50">
+        <select id="categorySelect" class="w-full p-4 mb-4 border border-gray-100 rounded-2xl text-lg bg-gray-50">
+            <option value="餐饮">🍜 餐饮</option>
+            <option value="购物">🛍️ 购物</option>
+            <option value="娱乐">🎬 娱乐</option>
+            <option value="交通">🚗 交通</option>
+            <option value="学习">📚 学习</option>
+            <option value="其他">📦 其他</option>
+        </select>
+        <input type="date" id="date" value="" class="w-full p-4 mb-4 border border-gray-100 rounded-2xl text-lg bg-gray-50">
+        <div class="flex gap-3 mt-2">
+            <button class="flex-1 p-4 rounded-2xl bg-gray-100 font-semibold cursor-pointer hover:bg-gray-200 transition-colors" id="cancelModal">取消</button>
+            <button class="flex-1 p-4 rounded-2xl bg-blue-500 text-white font-semibold cursor-pointer hover:bg-blue-600 transition-colors" id="saveBtn">保存</button>
+        </div>
+    </div>
+</div>
+
+<!-- 家园模态框 -->
+<div id="homeModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-3xl w-[85%] max-w-[350px] p-6 shadow-xl">
+        <h3 class="text-xl font-semibold mb-5 text-gray-800 flex items-center gap-2">
+            <i class="fas fa-home text-green-500"></i>
+            <span>我的家园</span>
+        </h3>
+        <div class="flex justify-between items-center mb-6">
+            <div class="flex items-center gap-2">
+                <i class="fas fa-coins text-yellow-500 text-xl"></i>
+                <span class="text-xl font-bold">💰 金币：<span id="coinCount">0</span></span>
+            </div>
+            <div class="text-sm text-gray-500">
+                连续记账：<span id="streakDays">0</span>天
+            </div>
+        </div>
+        <div class="mb-4">
+            <h4 class="font-medium mb-3 text-gray-700">可购买物品</h4>
+            <div id="shopItems" class="space-y-3">
+                <!-- 物品将通过JS动态生成 -->
+            </div>
+        </div>
+        <div class="flex justify-center mt-6">
+            <button class="px-6 py-3 rounded-2xl bg-gray-100 font-semibold cursor-pointer hover:bg-gray-200 transition-colors" id="closeHomeModal">关闭</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ---------- 数据存储 (localStorage) ----------
+    let bills = [];
+    let nextId = 1;
+    let editingId = null;
+    
+    // 游戏化数据
+    let gameData = {
+        coins: 50, // 初始金币
+        streakDays: 0, // 连续记账天数
+        lastLoginDate: '', // 最后登录日期
+        purchasedItems: ['小木屋'], // 已购买物品
+        lastTitleMonth: '' // 最后计算称号的月份
+    };
+
+    // 物品列表
+    const shopItems = [
+        { id: '小木屋', name: '小木屋', price: 100, icon: '🏠' },
+        { id: '小轿车', name: '小轿车', price: 200, icon: '🚗' },
+        { id: '猫咪', name: '猫咪', price: 50, icon: '🐱' },
+        { id: '电视机', name: '电视机', price: 80, icon: '📺' },
+        { id: '花园', name: '花园', price: 150, icon: '🌻' }
+    ];
+
+    // 从localStorage加载数据
+    function loadData() {
+        // 加载账单数据
+        const storedBills = localStorage.getItem('bills');
+        const storedNextId = localStorage.getItem('nextId');
+        if (storedBills) {
+            bills = JSON.parse(storedBills);
+        } else {
+            // 预置15-20条演示数据（2025年3-4月）
+            bills = [
+                { id: 1, desc: "午餐", amount: 48, category: "餐饮", date: "2025-03-15" },
+                { id: 2, desc: "电影票", amount: 79, category: "娱乐", date: "2025-03-16" },
+                { id: 3, desc: "买书", amount: 128, category: "学习", date: "2025-03-17" },
+                { id: 4, desc: "打车", amount: 35, category: "交通", date: "2025-03-18" },
+                { id: 5, desc: "超市购物", amount: 156, category: "购物", date: "2025-03-19" },
+                { id: 6, desc: "咖啡", amount: 28, category: "餐饮", date: "2025-03-20" },
+                { id: 7, desc: "健身房", amount: 89, category: "娱乐", date: "2025-03-21" },
+                { id: 8, desc: "加油", amount: 200, category: "交通", date: "2025-03-22" },
+                { id: 9, desc: "文具", amount: 45, category: "学习", date: "2025-03-23" },
+                { id: 10, desc: "外卖", amount: 36, category: "餐饮", date: "2025-03-24" },
+                { id: 11, desc: "衣服", amount: 299, category: "购物", date: "2025-03-25" },
+                { id: 12, desc: "KTV", amount: 150, category: "娱乐", date: "2025-03-26" },
+                { id: 13, desc: "地铁", amount: 8, category: "交通", date: "2025-03-27" },
+                { id: 14, desc: "网课", amount: 199, category: "学习", date: "2025-03-28" },
+                { id: 15, desc: "零食", amount: 68, category: "其他", date: "2025-03-29" },
+                { id: 16, desc: "早餐", amount: 15, category: "餐饮", date: "2025-04-01" },
+                { id: 17, desc: "打车", amount: 42, category: "交通", date: "2025-04-02" },
+                { id: 18, desc: "电影", amount: 88, category: "娱乐", date: "2025-04-03" },
+                { id: 19, desc: "超市", amount: 120, category: "购物", date: "2025-04-04" },
+                { id: 20, desc: "午餐", amount: 52, category: "餐饮", date: "2025-04-05" }
+            ];
+            nextId = 21;
+            saveBillData();
+        }
+        if (storedNextId) {
+            nextId = parseInt(storedNextId);
+        }
+
+        // 加载游戏数据
+        const storedGameData = localStorage.getItem('gameData');
+        if (storedGameData) {
+            gameData = { ...gameData, ...JSON.parse(storedGameData) };
+        } else {
+            saveGameData();
+        }
+
+        // 检查每日登录奖励
+        checkDailyLogin();
+    }
+
+    // 保存账单数据到localStorage
+    function saveBillData() {
+        localStorage.setItem('bills', JSON.stringify(bills));
+        localStorage.setItem('nextId', nextId.toString());
+    }
+
+    // 保存游戏数据到localStorage
+    function saveGameData() {
+        localStorage.setItem('gameData', JSON.stringify(gameData));
+    }
+
+    // 检查每日登录奖励
+    function checkDailyLogin() {
+        const today = new Date().toISOString().split('T')[0];
+        if (gameData.lastLoginDate !== today) {
+            // 新的一天
+            if (gameData.lastLoginDate) {
+                // 检查是否连续登录
+                const yesterday = new Date();
+                yesterday.setDate(yesterday.getDate() - 1);
+                const yesterdayStr = yesterday.toISOString().split('T')[0];
+                
+                if (gameData.lastLoginDate === yesterdayStr) {
+                    // 连续登录
+                    gameData.streakDays++;
+                    
+                    // 每3天奖励10金币
+                    if (gameData.streakDays % 3 === 0) {
+                        gameData.coins += 10;
+                        alert(`🎉 连续记账${gameData.streakDays}天，奖励10金币！`);
+                    }
+                } else {
+                    // 中断连续登录
+                    gameData.streakDays = 1;
+                }
+            } else {
+                // 首次登录
+                gameData.streakDays = 1;
+            }
+            
+            // 每日登录奖励5金币
+            gameData.coins += 5;
+            gameData.lastLoginDate = today;
+            saveGameData();
+        }
+    }
+
+    // 计算月度称号
+    function calculateMonthlyTitle() {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1;
+        const currentMonthStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+        
+        // 检查是否已经计算过当月称号
+        if (gameData.lastTitleMonth === currentMonthStr) {
+            return document.getElementById('monthlyTitle').textContent;
+        }
+        
+        // 获取上个月的账单
+        const lastMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+        const lastYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+        const lastMonthStr = `${lastYear}-${String(lastMonth).padStart(2, '0')}`;
+        
+        const lastMonthBills = bills.filter(b => b.date.startsWith(lastMonthStr));
+        
+        if (lastMonthBills.length === 0) {
+            gameData.lastTitleMonth = currentMonthStr;
+            saveGameData();
+            return '新手记账人';
+        }
+        
+        // 计算各分类总支出
+        const categoryTotals = {};
+        let totalExpense = 0;
+        
+        lastMonthBills.forEach(bill => {
+            categoryTotals[bill.category] = (categoryTotals[bill.category] || 0) + bill.amount;
+            totalExpense += bill.amount;
+        });
+        
+        // 找出最高分类
+        let maxCategory = '';
+        let maxAmount = 0;
+        
+        for (const [category, amount] of Object.entries(categoryTotals)) {
+            if (amount > maxAmount) {
+                maxAmount = amount;
+                maxCategory = category;
+            }
+        }
+        
+        // 计算所有月份的平均值
+        const months = [...new Set(bills.map(b => b.date.substring(0, 7)))];
+        let allMonthsTotal = 0;
+        let allMonthsCount = 0;
+        
+        months.forEach(month => {
+            const monthBills = bills.filter(b => b.date.startsWith(month));
+            const monthTotal = monthBills.reduce((sum, b) => sum + b.amount, 0);
+            allMonthsTotal += monthTotal;
+            allMonthsCount++;
+        });
+        
+        const avgExpense = allMonthsCount > 1 ? allMonthsTotal / allMonthsCount : totalExpense / 2;
+        
+        // 确定称号
+        let title = '';
+        
+        // 优先选择消费类别最高的称号
+        switch (maxCategory) {
+            case '交通':
+                title = '风火轮小能手';
+                break;
+            case '餐饮':
+                title = '美食探险家';
+                break;
+            case '购物':
+                title = '剁手党领袖';
+                break;
+            case '学习':
+                title = '学霸の日常';
+                break;
+            case '娱乐':
+                title = '派对动物';
+                break;
+            default:
+                title = '新手记账人';
+        }
+        
+        // 检查是否满足其他称号条件
+        if (totalExpense < avgExpense) {
+            title = '省钱小能手';
+        }
+        
+        if (lastMonthBills.length > 20) {
+            title = '自律记账人';
+        }
+        
+        gameData.lastTitleMonth = currentMonthStr;
+        saveGameData();
+        return title;
+    }
+
+    // 渲染家园物品
+    function renderShopItems() {
+        const shopItemsContainer = document.getElementById('shopItems');
+        shopItemsContainer.innerHTML = '';
+        
+        shopItems.forEach(item => {
+            const isPurchased = gameData.purchasedItems.includes(item.id);
+            const itemElement = document.createElement('div');
+            itemElement.className = 'flex justify-between items-center p-3 bg-gray-50 rounded-2xl';
+            itemElement.innerHTML = `
+                <div class="flex items-center gap-3">
+                    <span class="text-2xl">${item.icon}</span>
+                    <div>
+                        <div class="font-medium">${item.name}</div>
+                        <div class="text-sm text-gray-500">${item.price}金币</div>
+                    </div>
+                </div>
+                <button ${isPurchased ? 'disabled' : ''} class="px-4 py-2 rounded-xl ${isPurchased ? 'bg-gray-200 text-gray-500' : 'bg-green-500 text-white hover:bg-green-600'} transition-colors" onclick="purchaseItem('${item.id}')">
+                    ${isPurchased ? '已拥有' : '购买'}
+                </button>
+            `;
+            shopItemsContainer.appendChild(itemElement);
+        });
+    }
+
+    // 购买物品
+    function purchaseItem(itemId) {
+        const item = shopItems.find(i => i.id === itemId);
+        if (!item) return;
+        
+        if (gameData.coins < item.price) {
+            alert('金币不足，无法购买！');
+            return;
+        }
+        
+        if (gameData.purchasedItems.includes(itemId)) {
+            return;
+        }
+        
+        gameData.coins -= item.price;
+        gameData.purchasedItems.push(itemId);
+        saveGameData();
+        
+        document.getElementById('coinCount').textContent = gameData.coins;
+        renderShopItems();
+        
+        alert(`🎉 购买${item.name}成功！`);
+    }
+
+    // DOM 元素
+    const totalExpenseSpan = document.getElementById('totalExpense');
+    const billCountSpan = document.getElementById('billCount');
+    const avgExpenseSpan = document.getElementById('avgExpense');
+    const topCategorySpan = document.getElementById('topCategory');
+    const billListContainer = document.getElementById('billListContainer');
+    const emptyMsg = document.getElementById('emptyMsg');
+    const modal = document.getElementById('modal');
+    const homeModal = document.getElementById('homeModal');
+    const modalTitle = document.getElementById('modalTitle');
+    const descInput = document.getElementById('desc');
+    const amountInput = document.getElementById('amount');
+    const categorySelect = document.getElementById('categorySelect');
+    const dateInput = document.getElementById('date');
+    const addBtn = document.getElementById('addBtn');
+    const homeBtn = document.getElementById('homeBtn');
+    const cancelModal = document.getElementById('cancelModal');
+    const saveBtn = document.getElementById('saveBtn');
+    const closeHomeModal = document.getElementById('closeHomeModal');
+
+    let pieChart = null;
+
+    // 辅助函数：获取当月支出总额、总账单数、平均支出、最多类别
+    function getStats() {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1;
+        const monthBills = bills.filter(b => {
+            const [y,m] = b.date.split('-');
+            return parseInt(y) === currentYear && parseInt(m) === currentMonth;
+        });
+        const total = monthBills.reduce((sum, b) => sum + b.amount, 0);
+        const count = monthBills.length;
+        const avg = count === 0 ? 0 : (total / count).toFixed(1);
+        // 计算类别支出总额
+        const catMap = new Map();
+        monthBills.forEach(b => { catMap.set(b.category, (catMap.get(b.category)||0) + b.amount); });
+        let topCat = "无";
+        let maxAmt = 0;
+        for(let [cat, amt] of catMap.entries()) {
+            if(amt > maxAmt) { maxAmt = amt; topCat = cat; }
+        }
+        return { total, count, avg, topCat };
+    }
+
+    // 更新所有UI
+    function refreshUI() {
+        // 更新头部统计
+        const stats = getStats();
+        totalExpenseSpan.innerText = stats.total.toFixed(2);
+        billCountSpan.innerText = stats.count;
+        avgExpenseSpan.innerText = `¥${stats.avg}`;
+        topCategorySpan.innerText = stats.topCat;
+
+        // 更新月度称号
+        const title = calculateMonthlyTitle();
+        document.getElementById('monthlyTitle').textContent = title;
+
+        // 渲染账单列表（全部账单，不限当月）
+        if(bills.length === 0) {
+            billListContainer.innerHTML = '';
+            emptyMsg.classList.remove('hidden');
+        } else {
+            emptyMsg.classList.add('hidden');
+            billListContainer.innerHTML = bills.map(bill => `
+                <div class="flex justify-between items-center py-4 border-b border-gray-50 bill-item">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center">
+                            ${getCategoryIcon(bill.category)}
+                        </div>
+                        <div>
+                            <div class="font-medium text-gray-800">${escapeHtml(bill.desc)}</div>
+                            <div class="text-sm text-gray-400">${bill.date}</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="font-semibold text-red-500 mr-4">¥${bill.amount.toFixed(2)}</div>
+                        <div class="flex gap-3">
+                            <button onclick="editBill(${bill.id})" class="text-gray-400 hover:text-blue-500 transition-colors">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button onclick="deleteBill(${bill.id})" class="text-gray-400 hover:text-red-500 transition-colors">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // 更新饼图（按类别汇总当月支出）
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1;
+        const monthBills = bills.filter(b => {
+            const [y,m] = b.date.split('-');
+            return parseInt(y) === currentYear && parseInt(m) === currentMonth;
+        });
+        const catMap = new Map();
+        monthBills.forEach(b => { catMap.set(b.category, (catMap.get(b.category)||0) + b.amount); });
+        const pieData = Array.from(catMap.entries()).map(([name, value]) => ({ name, value }));
+        if(pieChart) {
+            pieChart.setOption({
+                color: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#6b7280'],
+                series: [{
+                    data: pieData,
+                    label: { show: true, formatter: '{b}: {d}%' }
+                }]
+            });
+        }
+    }
+
+    function getCategoryIcon(cat) {
+        const map = { 
+            '餐饮': '<i class="fas fa-utensils text-blue-500"></i>',
+            '购物': '<i class="fas fa-shopping-bag text-green-500"></i>',
+            '娱乐': '<i class="fas fa-film text-orange-500"></i>',
+            '交通': '<i class="fas fa-car text-purple-500"></i>',
+            '学习': '<i class="fas fa-book text-pink-500"></i>',
+            '其他': '<i class="fas fa-box text-gray-500"></i>'
+        };
+        return map[cat] || '<i class="fas fa-box text-gray-500"></i>';
+    }
+
+    function escapeHtml(str) {
+        return str.replace(/[&<>]/g, function(m) {
+            if(m === '&') return '&amp;';
+            if(m === '<') return '&lt;';
+            if(m === '>') return '&gt;';
+            return m;
+        });
+    }
+
+    // 增删改逻辑
+    window.deleteBill = function(id) {
+        if(confirm('确定删除这笔账单吗？')) {
+            bills = bills.filter(b => b.id !== id);
+            saveBillData();
+            refreshUI();
+        }
+    };
+
+    window.editBill = function(id) {
+        const bill = bills.find(b => b.id === id);
+        if(bill) {
+            editingId = id;
+            modalTitle.innerText = '编辑账单';
+            descInput.value = bill.desc;
+            amountInput.value = bill.amount;
+            categorySelect.value = bill.category;
+            dateInput.value = bill.date;
+            modal.classList.remove('hidden');
+        }
+    };
+
+    function saveBill() {
+        const desc = descInput.value.trim();
+        const amount = parseFloat(amountInput.value);
+        const category = categorySelect.value;
+        const date = dateInput.value;
+        if(!desc || isNaN(amount) || amount <= 0 || !date) {
+            alert('请完整填写信息');
+            return;
+        }
+        
+        if(editingId !== null) {
+            // 编辑
+            const index = bills.findIndex(b => b.id === editingId);
+            if(index !== -1) {
+                bills[index] = { ...bills[index], desc, amount, category, date };
+            }
+            editingId = null;
+        } else {
+            // 新增
+            bills.push({ id: nextId++, desc, amount, category, date });
+            
+            // 奖励金币
+            const coinsEarned = Math.floor(amount / 10);
+            if (coinsEarned > 0) {
+                gameData.coins += coinsEarned;
+                saveGameData();
+                alert(`🎉 添加账单成功，获得${coinsEarned}金币！`);
+            }
+        }
+        
+        saveBillData();
+        closeModal();
+        refreshUI();
+    }
+
+    function openAddModal() {
+        editingId = null;
+        modalTitle.innerText = '添加账单';
+        descInput.value = '';
+        amountInput.value = '';
+        categorySelect.value = '餐饮';
+        const today = new Date().toISOString().slice(0,10);
+        dateInput.value = today;
+        modal.classList.remove('hidden');
+    }
+
+    function closeModal() {
+        modal.classList.add('hidden');
+    }
+
+    function openHomeModal() {
+        document.getElementById('coinCount').textContent = gameData.coins;
+        document.getElementById('streakDays').textContent = gameData.streakDays;
+        renderShopItems();
+        homeModal.classList.remove('hidden');
+    }
+
+    function closeHomeModalFunc() {
+        homeModal.classList.add('hidden');
+    }
+
+    addBtn.onclick = openAddModal;
+    homeBtn.onclick = openHomeModal;
+    cancelModal.onclick = closeModal;
+    saveBtn.onclick = saveBill;
+    closeHomeModal.onclick = closeHomeModalFunc;
+    window.onclick = function(e) {
+        if(e.target === modal) closeModal();
+        if(e.target === homeModal) closeHomeModalFunc();
+    };
+
+    // 初始化图表
+    function initChart() {
+        const dom = document.getElementById('pieChart');
+        pieChart = echarts.init(dom);
+        pieChart.setOption({
+            tooltip: { trigger: 'item' },
+            legend: { top: 'bottom' },
+            color: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#6b7280'],
+            series: [{
+                type: 'pie',
+                radius: '55%',
+                data: [],
+                emphasis: { scale: true },
+                label: { show: true, formatter: '{b}: {d}%' }
+            }]
+        });
+    }
+
+    // 启动
+    loadData();
+    initChart();
+    refreshUI();
+</script>
+</body>
+</html>
