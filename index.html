@@ -4,147 +4,200 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>智析流水 - 智能记账演示版</title>
-    <!-- 引入 Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 引入 ECharts 和 Font Awesome -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
-        /* 保留一些自定义样式 */
         #pieChart { height: 250px; width: 100%; }
         .bill-item:hover { background-color: #f9fafb; }
+        .emotion-message {
+            animation: slideDown 0.3s ease-out;
+        }
+        @keyframes slideDown {
+            from { transform: translateY(-100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .cat-feedback {
+            animation: popUp 0.3s ease-out;
+        }
+        @keyframes popUp {
+            from { transform: scale(0.8); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
     </style>
 </head>
-<body class="bg-[#f0f4f8] p-5">
+<body class="bg-[#fef2f2] p-5">
 <div class="container mx-auto max-w-3xl">
+    <!-- 情绪提示框 -->
+    <div id="emotionMessage" class="fixed top-4 left-1/2 transform -translate-x-1/2 bg-white rounded-2xl p-4 shadow-lg z-50 hidden emotion-message">
+        <div class="flex items-center gap-3">
+            <div class="text-2xl">🎉</div>
+            <div id="emotionText" class="font-medium text-gray-800"></div>
+        </div>
+    </div>
+
+    <!-- 猫咪反馈框 -->
+    <div id="catFeedback" class="fixed left-1/2 transform -translate-x-1/2 top-1/4 bg-white rounded-2xl p-4 shadow-lg z-50 hidden cat-feedback">
+        <div class="flex items-center gap-3">
+            <div class="text-2xl">🐱</div>
+            <div id="catFeedbackText" class="font-medium text-gray-800"></div>
+        </div>
+    </div>
+
     <!-- 头部卡片 -->
     <div class="bg-white rounded-3xl p-6 mb-6 shadow-sm">
-        <div class="flex items-center gap-3 mb-4">
-            <div class="w-10 h-10 bg-blue-500 rounded-2xl flex items-center justify-center text-white">
-                <i class="fas fa-wallet text-lg"></i>
+        <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-pink-500 rounded-2xl flex items-center justify-center text-white">
+                    <i class="fas fa-wallet text-lg"></i>
+                </div>
+                <h1 class="text-2xl font-bold text-gray-800">智析流水</h1>
             </div>
-            <h1 class="text-2xl font-bold text-gray-800">智析流水</h1>
+            <div class="flex items-center gap-2 bg-yellow-100 px-4 py-2 rounded-2xl">
+                <i class="fas fa-coins text-yellow-500"></i>
+                <span class="font-bold text-gray-700">喵币: <span id="totalCoins">0</span></span>
+            </div>
         </div>
-        <div class="flex items-baseline gap-2">
-            <span class="text-4xl font-bold text-green-700">¥<span id="totalExpense">0</span></span>
-            <span class="text-gray-500">本月支出</span>
-        </div>
-        <!-- 月度称号 -->
-        <div class="flex items-center gap-2 mt-3">
-            <span class="text-lg font-medium text-blue-600">🏅 本月称号：</span>
-            <span class="text-lg font-semibold" id="monthlyTitle">新手记账人</span>
-            <i class="fas fa-question-circle text-gray-400" title="称号规则：根据上个月的账单数据生成，交通类最高→风火轮小能手，餐饮类最高→美食探险家，购物类最高→剁手党领袖，学习类最高→学霸の日常，娱乐类最高→派对动物，总支出低于平均值→省钱小能手，记账次数大于20次→自律记账人"></i>
-        </div>
-        <div class="text-sm text-gray-400 mt-2 flex items-center gap-1">
-            <i class="fas fa-info-circle text-xs"></i>
-            <span>数据存储于浏览器，刷新后不丢失</span>
+        <div class="grid grid-cols-3 gap-4">
+            <div class="text-center">
+                <div class="text-sm text-gray-500 mb-1">总收入</div>
+                <div class="text-2xl font-bold text-green-600">¥<span id="totalIncome">0</span></div>
+            </div>
+            <div class="text-center">
+                <div class="text-sm text-gray-500 mb-1">总支出</div>
+                <div class="text-2xl font-bold text-red-500">¥<span id="totalExpense">0</span></div>
+            </div>
+            <div class="text-center">
+                <div class="text-sm text-gray-500 mb-1">结余</div>
+                <div class="text-2xl font-bold text-blue-600">¥<span id="balance">0</span></div>
+            </div>
         </div>
     </div>
 
-    <!-- 统计卡片 -->
-    <div class="flex gap-4 mb-6">
-        <div class="bg-white rounded-2xl p-5 flex-1 text-center shadow-sm">
-            <div class="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                <i class="fas fa-receipt text-xl text-blue-500"></i>
+    <!-- 猫咪与房子区域 -->
+    <div class="bg-white rounded-2xl p-6 shadow-sm mb-6">
+        <h2 class="text-xl font-semibold mb-4 text-gray-800 flex items-center gap-2">
+            <i class="fas fa-home text-pink-500"></i>
+            <span>我的小窝</span>
+        </h2>
+        <div class="flex flex-col md:flex-row gap-6">
+            <!-- 左侧猫咪区域 -->
+            <div class="flex-1 bg-gray-50 rounded-2xl p-6 text-center">
+                <div class="text-6xl mb-2" id="cat">🐱</div>
+                <div class="font-semibold text-gray-700 mb-1">小花</div>
+                <div class="text-sm text-gray-500 mb-4">亲密值: <span id="catAffection">0</span></div>
+                <div class="text-3xl mb-2">🥣</div>
+                <div class="text-sm text-gray-500">猫碗</div>
             </div>
-            <div class="text-sm text-gray-500 mb-1">账单数</div>
-            <div class="text-2xl font-bold text-gray-800" id="billCount">0</div>
-        </div>
-        <div class="bg-white rounded-2xl p-5 flex-1 text-center shadow-sm">
-            <div class="w-12 h-12 bg-green-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                <i class="fas fa-chart-line text-xl text-green-500"></i>
+            <!-- 右侧道具区域 -->
+            <div class="flex-1">
+                <h3 class="font-semibold mb-3 text-gray-700 flex items-center gap-2">
+                    <i class="fas fa-gift text-pink-500"></i>
+                    <span>我的道具</span>
+                </h3>
+                <div id="houseItems" class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <!-- 动态生成 -->
+                </div>
             </div>
-            <div class="text-sm text-gray-500 mb-1">日均支出</div>
-            <div class="text-2xl font-bold text-gray-800" id="avgExpense">¥0</div>
-        </div>
-        <div class="bg-white rounded-2xl p-5 flex-1 text-center shadow-sm">
-            <div class="w-12 h-12 bg-orange-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                <i class="fas fa-tag text-xl text-orange-500"></i>
-            </div>
-            <div class="text-sm text-gray-500 mb-1">最多类别</div>
-            <div class="text-2xl font-bold text-gray-800" id="topCategory">-</div>
         </div>
     </div>
 
-    <!-- 图表卡片 -->
-    <div class="bg-white rounded-2xl p-6 mb-6 shadow-sm">
-        <div class="font-semibold mb-5 text-lg flex items-center gap-2 text-gray-800">
-            <i class="fas fa-chart-pie text-blue-500"></i>
-            <span>支出构成（按类别）</span>
+    <!-- 记账表单 -->
+    <div class="bg-white rounded-2xl p-6 shadow-sm mb-6">
+        <h2 class="text-xl font-semibold mb-4 text-gray-800 flex items-center gap-2">
+            <i class="fas fa-plus-circle text-pink-500"></i>
+            <span>添加账单</span>
+        </h2>
+        <div class="flex gap-3 mb-4">
+            <button type="button" class="flex-1 p-3 rounded-2xl font-semibold transition-colors bg-green-500 text-white" id="typeExpense">支出</button>
+            <button type="button" class="flex-1 p-3 rounded-2xl font-semibold transition-colors bg-gray-100 text-gray-600" id="typeIncome">收入</button>
         </div>
-        <div id="pieChart"></div>
+        <input type="hidden" id="billType" value="expense">
+        <input type="text" id="desc" placeholder="描述 (例: 午餐)" autocomplete="off" class="w-full p-4 mb-4 border border-gray-100 rounded-2xl text-lg bg-gray-50">
+        <input type="number" id="amount" placeholder="金额 (¥)" step="0.01" class="w-full p-4 mb-4 border border-gray-100 rounded-2xl text-lg bg-gray-50">
+        <select id="categorySelect" class="w-full p-4 mb-4 border border-gray-100 rounded-2xl text-lg bg-gray-50">
+            <option value="餐饮">� 餐饮</option>
+            <option value="购物">🛍️ 购物</option>
+            <option value="娱乐">🎬 娱乐</option>
+            <option value="交通">🚗 交通</option>
+            <option value="学习">📚 学习</option>
+            <option value="宠物">🐱 宠物</option>
+            <option value="其他支出">📦 其他支出</option>
+        </select>
+        <select id="subCategorySelect" class="w-full p-4 mb-4 border border-gray-100 rounded-2xl text-lg bg-gray-50">
+            <option value="正餐">🍽️ 正餐</option>
+            <option value="饮品">🥤 饮品</option>
+            <option value="零食水果">🍉 零食水果</option>
+            <option value="外卖">🍔 外卖</option>
+        </select>
+        <input type="date" id="date" value="" class="w-full p-4 mb-4 border border-gray-100 rounded-2xl text-lg bg-gray-50">
+        <button class="w-full p-4 rounded-2xl bg-pink-500 text-white font-semibold cursor-pointer hover:bg-pink-600 transition-colors" id="saveBtn">保存账单</button>
+    </div>
+
+    <!-- 月份筛选 -->
+    <div class="bg-white rounded-2xl p-4 mb-6 shadow-sm flex items-center justify-between">
+        <span class="font-semibold text-gray-700">📅 历史账单</span>
+        <select id="monthFilter" class="p-2 border border-gray-200 rounded-xl bg-gray-50 text-gray-700 cursor-pointer">
+            <option value="">全部月份</option>
+        </select>
     </div>
 
     <!-- 账单列表 -->
-    <div class="bg-white rounded-2xl p-6 shadow-sm">
+    <div class="bg-white rounded-2xl p-6 shadow-sm mb-6">
         <div class="flex justify-between mb-4">
             <span class="font-semibold text-gray-800">近期账单</span>
             <span class="text-gray-400 text-sm">点击编辑/删除</span>
         </div>
         <div id="billListContainer"></div>
         <div id="emptyMsg" class="text-center py-10 text-gray-400">
-            暂无账单，点击右下角➕添加
+            暂无账单，添加一笔吧！
+        </div>
+    </div>
+
+    <!-- 图表卡片 -->
+    <div class="bg-white rounded-2xl p-6 shadow-sm mb-6">
+        <div class="font-semibold mb-5 text-lg flex items-center gap-2 text-gray-800">
+            <i class="fas fa-chart-pie text-pink-500"></i>
+            <span>支出构成（按类别）</span>
+        </div>
+        <div id="pieChart"></div>
+    </div>
+
+    <!-- 商店区域 -->
+    <div class="bg-white rounded-2xl p-6 shadow-sm mb-20">
+        <h2 class="text-xl font-semibold mb-4 text-gray-800 flex items-center gap-2">
+            <i class="fas fa-shopping-cart text-pink-500"></i>
+            <span>商店</span>
+        </h2>
+        <div id="shopItems" class="space-y-3">
+            <!-- 动态生成 -->
         </div>
     </div>
 </div>
 
-<!-- 添加账单按钮 -->
-<button class="fixed bottom-8 right-8 bg-blue-500 w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl shadow-lg cursor-pointer border-0 z-50 hover:bg-blue-600 transition-colors" id="addBtn">
-    <i class="fas fa-plus"></i>
-</button>
-
-<!-- 家园按钮 -->
-<button class="fixed bottom-8 left-8 bg-green-500 w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl shadow-lg cursor-pointer border-0 z-50 hover:bg-green-600 transition-colors" id="homeBtn">
-    <i class="fas fa-home"></i>
-</button>
-
-<!-- 账单模态框 -->
+<!-- 编辑模态框 -->
 <div id="modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
     <div class="bg-white rounded-3xl w-[85%] max-w-[350px] p-6 shadow-xl">
-        <h3 id="modalTitle" class="text-xl font-semibold mb-5 text-gray-800">添加账单</h3>
-        <input type="text" id="desc" placeholder="消费项目 (例: 午餐)" autocomplete="off" class="w-full p-4 mb-4 border border-gray-100 rounded-2xl text-lg bg-gray-50">
-        <input type="number" id="amount" placeholder="金额 (¥)" step="0.01" class="w-full p-4 mb-4 border border-gray-100 rounded-2xl text-lg bg-gray-50">
-        <select id="categorySelect" class="w-full p-4 mb-4 border border-gray-100 rounded-2xl text-lg bg-gray-50">
+        <h3 id="modalTitle" class="text-xl font-semibold mb-5 text-gray-800">编辑账单</h3>
+        <div class="flex gap-3 mb-4">
+            <button type="button" class="flex-1 p-3 rounded-2xl font-semibold transition-colors bg-green-500 text-white" id="editTypeExpense">支出</button>
+            <button type="button" class="flex-1 p-3 rounded-2xl font-semibold transition-colors bg-gray-100 text-gray-600" id="editTypeIncome">收入</button>
+        </div>
+        <input type="hidden" id="editBillType" value="expense">
+        <input type="hidden" id="editBillId">
+        <input type="text" id="editDesc" placeholder="描述 (例: 午餐)" autocomplete="off" class="w-full p-4 mb-4 border border-gray-100 rounded-2xl text-lg bg-gray-50">
+        <input type="number" id="editAmount" placeholder="金额 (¥)" step="0.01" class="w-full p-4 mb-4 border border-gray-100 rounded-2xl text-lg bg-gray-50">
+        <select id="editCategorySelect" class="w-full p-4 mb-4 border border-gray-100 rounded-2xl text-lg bg-gray-50">
             <option value="餐饮">🍜 餐饮</option>
-            <option value="购物">🛍️ 购物</option>
-            <option value="娱乐">🎬 娱乐</option>
-            <option value="交通">🚗 交通</option>
-            <option value="学习">📚 学习</option>
-            <option value="其他">📦 其他</option>
         </select>
-        <input type="date" id="date" value="" class="w-full p-4 mb-4 border border-gray-100 rounded-2xl text-lg bg-gray-50">
-        <div class="flex gap-3 mt-2">
+        <select id="editSubCategorySelect" class="w-full p-4 mb-4 border border-gray-100 rounded-2xl text-lg bg-gray-50">
+            <option value="正餐">🍽️ 正餐</option>
+        </select>
+        <input type="date" id="editDate" value="" class="w-full p-4 mb-4 border border-gray-100 rounded-2xl text-lg bg-gray-50">
+        <div class="flex gap-3">
             <button class="flex-1 p-4 rounded-2xl bg-gray-100 font-semibold cursor-pointer hover:bg-gray-200 transition-colors" id="cancelModal">取消</button>
-            <button class="flex-1 p-4 rounded-2xl bg-blue-500 text-white font-semibold cursor-pointer hover:bg-blue-600 transition-colors" id="saveBtn">保存</button>
-        </div>
-    </div>
-</div>
-
-<!-- 家园模态框 -->
-<div id="homeModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-    <div class="bg-white rounded-3xl w-[85%] max-w-[350px] p-6 shadow-xl">
-        <h3 class="text-xl font-semibold mb-5 text-gray-800 flex items-center gap-2">
-            <i class="fas fa-home text-green-500"></i>
-            <span>我的家园</span>
-        </h3>
-        <div class="flex justify-between items-center mb-6">
-            <div class="flex items-center gap-2">
-                <i class="fas fa-coins text-yellow-500 text-xl"></i>
-                <span class="text-xl font-bold">💰 金币：<span id="coinCount">0</span></span>
-            </div>
-            <div class="text-sm text-gray-500">
-                连续记账：<span id="streakDays">0</span>天
-            </div>
-        </div>
-        <div class="mb-4">
-            <h4 class="font-medium mb-3 text-gray-700">可购买物品</h4>
-            <div id="shopItems" class="space-y-3">
-                <!-- 物品将通过JS动态生成 -->
-            </div>
-        </div>
-        <div class="flex justify-center mt-6">
-            <button class="px-6 py-3 rounded-2xl bg-gray-100 font-semibold cursor-pointer hover:bg-gray-200 transition-colors" id="closeHomeModal">关闭</button>
+            <button class="flex-1 p-4 rounded-2xl bg-pink-500 text-white font-semibold cursor-pointer hover:bg-pink-600 transition-colors" id="updateBtn">更新</button>
         </div>
     </div>
 </div>
@@ -154,64 +207,130 @@
     let bills = [];
     let nextId = 1;
     let editingId = null;
-    
-    // 游戏化数据
+
+    // 游戏化数据 - 喵币系统
     let gameData = {
-        coins: 50, // 初始金币
-        streakDays: 0, // 连续记账天数
-        lastLoginDate: '', // 最后登录日期
-        purchasedItems: ['小木屋'], // 已购买物品
-        lastTitleMonth: '' // 最后计算称号的月份
+        coins: 100,
+        streakDays: 0,
+        lastRecordDate: '',
+        todayRewarded: false,
+        ownedItems: ['鱼', '小鱼干', '小鱼干'],
+        catAffection: 0
     };
 
-    // 物品列表
-    const shopItems = [
-        { id: '小木屋', name: '小木屋', price: 100, icon: '🏠' },
-        { id: '小轿车', name: '小轿车', price: 200, icon: '🚗' },
-        { id: '猫咪', name: '猫咪', price: 50, icon: '🐱' },
-        { id: '电视机', name: '电视机', price: 80, icon: '📺' },
-        { id: '花园', name: '花园', price: 150, icon: '🌻' }
+    // 商店物品列表
+    const shopItemsList = [
+        { id: '鱼', name: '鱼', price: 50, icon: '🐟', desc: '美味的鱼' },
+        { id: '小鱼干', name: '小鱼干', price: 20, icon: '🐟', desc: '营养小鱼干' },
+        { id: '逗猫棒', name: '逗猫棒', price: 30, icon: '🪀', desc: '猫咪的最爱' },
+        { id: '猫抓板', name: '猫抓板', price: 80, icon: '🪧', desc: '磨爪神器' },
+        { id: '豪华猫爬架', name: '豪华猫爬架', price: 200, icon: '🏰', desc: '猫咪的宫殿' }
+    ];
+
+    // 分类配置
+    const categories = {
+        income: {
+            '薪资奖金': ['工资', '奖金', '津贴'],
+            '兼职外快': ['家教', '设计', '写作', '跑腿', '其他兼职'],
+            '红包礼金': ['生日红包', '节日红包', '婚礼红包'],
+            '退款报销': ['退货退款', '医保报销', '其他报销'],
+            '其他收入': ['其他收入']
+        },
+        expense: {
+            '餐饮': ['正餐', '饮品', '零食水果', '外卖'],
+            '购物': ['服饰', '数码', '日用', '美妆'],
+            '娱乐': ['电影', '游戏', '聚会', '旅游'],
+            '交通': ['公交地铁', '打车', '加油', '维修'],
+            '学习': ['书籍', '课程', '文具'],
+            '宠物': ['猫粮', '玩具', '医疗'],
+            '其他支出': ['其他支出']
+        }
+    };
+
+    // 情绪价值话术库
+    const emotionMessages = {
+        income: [
+            '哇，钱包鼓了！💸',
+            '你离财富自由又近一步！✨',
+            '这笔收入来得真及时！🎉',
+            '赚钱小能手，真棒！👏',
+            '积累财富的感觉真好！💰'
+        ],
+        餐饮: [
+            '好好吃饭，身体棒棒~ 🍜',
+            '美食是生活的调味剂！😋',
+            '享受每一顿饭的美好时光~ 🍽️'
+        ],
+        娱乐: [
+            '快乐很重要！享受生活吧~ 🎉',
+            '适当放松，充电再出发！⚡',
+            '生活需要一点乐趣~ 🎮'
+        ],
+        学习: [
+            '投资自己永远不亏！📚',
+            '知识就是力量！💪',
+            '学习让你更优秀~ ✨'
+        ],
+        宠物: [
+            '小猫咪谢谢你~ 🐱',
+            '宠物是最忠实的伙伴！❤️',
+            '照顾宠物的你超有爱心~ 🥰'
+        ],
+        general: [
+            '记账的你超自律！📝',
+            '每一笔都清晰，生活更有序！🌟',
+            '坚持记账，掌控生活！💪',
+            '你的财务状况越来越清晰啦！📊',
+            '好习惯正在养成，加油！🔥'
+        ]
+    };
+
+    // 猫咪反馈话术库
+    const catFeedbackMessages = [
+        '喵~真好吃！😋',
+        '谢谢你，我好幸福～❤️',
+        '你是我最好的铲屎官！💕',
+        '这个味道真棒！👍',
+        '我好喜欢这个！😻',
+        '有你真好~ 🥰',
+        '谢谢主人～ 😽',
+        '我超满足的！✨'
     ];
 
     // 从localStorage加载数据
     function loadData() {
-        // 加载账单数据
         const storedBills = localStorage.getItem('bills');
         const storedNextId = localStorage.getItem('nextId');
         if (storedBills) {
             bills = JSON.parse(storedBills);
         } else {
-            // 预置15-20条演示数据（2025年3-4月）
+            // 预置至少5条账单（最近一周）
+            const today = new Date();
+            const todayStr = today.toISOString().split('T')[0];
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+            const yesterdayStr = yesterday.toISOString().split('T')[0];
+            const twoDaysAgo = new Date(today);
+            twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+            const twoDaysAgoStr = twoDaysAgo.toISOString().split('T')[0];
+            const threeDaysAgo = new Date(today);
+            threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+            const threeDaysAgoStr = threeDaysAgo.toISOString().split('T')[0];
+
             bills = [
-                { id: 1, desc: "午餐", amount: 48, category: "餐饮", date: "2025-03-15" },
-                { id: 2, desc: "电影票", amount: 79, category: "娱乐", date: "2025-03-16" },
-                { id: 3, desc: "买书", amount: 128, category: "学习", date: "2025-03-17" },
-                { id: 4, desc: "打车", amount: 35, category: "交通", date: "2025-03-18" },
-                { id: 5, desc: "超市购物", amount: 156, category: "购物", date: "2025-03-19" },
-                { id: 6, desc: "咖啡", amount: 28, category: "餐饮", date: "2025-03-20" },
-                { id: 7, desc: "健身房", amount: 89, category: "娱乐", date: "2025-03-21" },
-                { id: 8, desc: "加油", amount: 200, category: "交通", date: "2025-03-22" },
-                { id: 9, desc: "文具", amount: 45, category: "学习", date: "2025-03-23" },
-                { id: 10, desc: "外卖", amount: 36, category: "餐饮", date: "2025-03-24" },
-                { id: 11, desc: "衣服", amount: 299, category: "购物", date: "2025-03-25" },
-                { id: 12, desc: "KTV", amount: 150, category: "娱乐", date: "2025-03-26" },
-                { id: 13, desc: "地铁", amount: 8, category: "交通", date: "2025-03-27" },
-                { id: 14, desc: "网课", amount: 199, category: "学习", date: "2025-03-28" },
-                { id: 15, desc: "零食", amount: 68, category: "其他", date: "2025-03-29" },
-                { id: 16, desc: "早餐", amount: 15, category: "餐饮", date: "2025-04-01" },
-                { id: 17, desc: "打车", amount: 42, category: "交通", date: "2025-04-02" },
-                { id: 18, desc: "电影", amount: 88, category: "娱乐", date: "2025-04-03" },
-                { id: 19, desc: "超市", amount: 120, category: "购物", date: "2025-04-04" },
-                { id: 20, desc: "午餐", amount: 52, category: "餐饮", date: "2025-04-05" }
+                { id: 1, desc: "工资", amount: 5000, type: "income", category: "薪资奖金", subCategory: "工资", date: threeDaysAgoStr },
+                { id: 2, desc: "午餐", amount: 45, type: "expense", category: "餐饮", subCategory: "正餐", date: twoDaysAgoStr },
+                { id: 3, desc: "打车", amount: 30, type: "expense", category: "交通", subCategory: "打车", date: twoDaysAgoStr },
+                { id: 4, desc: "买书", amount: 89, type: "expense", category: "学习", subCategory: "书籍", date: yesterdayStr },
+                { id: 5, desc: "奖金", amount: 1000, type: "income", category: "薪资奖金", subCategory: "奖金", date: todayStr }
             ];
-            nextId = 21;
+            nextId = 6;
             saveBillData();
         }
         if (storedNextId) {
             nextId = parseInt(storedNextId);
         }
 
-        // 加载游戏数据
         const storedGameData = localStorage.getItem('gameData');
         if (storedGameData) {
             gameData = { ...gameData, ...JSON.parse(storedGameData) };
@@ -219,451 +338,547 @@
             saveGameData();
         }
 
-        // 检查每日登录奖励
-        checkDailyLogin();
+        checkDailyRecord();
     }
 
-    // 保存账单数据到localStorage
     function saveBillData() {
         localStorage.setItem('bills', JSON.stringify(bills));
         localStorage.setItem('nextId', nextId.toString());
     }
 
-    // 保存游戏数据到localStorage
     function saveGameData() {
         localStorage.setItem('gameData', JSON.stringify(gameData));
     }
 
-    // 检查每日登录奖励
-    function checkDailyLogin() {
+    // 检查每日记账奖励
+    function checkDailyRecord() {
         const today = new Date().toISOString().split('T')[0];
-        if (gameData.lastLoginDate !== today) {
-            // 新的一天
-            if (gameData.lastLoginDate) {
-                // 检查是否连续登录
+        if (gameData.lastRecordDate !== today) {
+            if (gameData.lastRecordDate) {
                 const yesterday = new Date();
                 yesterday.setDate(yesterday.getDate() - 1);
                 const yesterdayStr = yesterday.toISOString().split('T')[0];
-                
-                if (gameData.lastLoginDate === yesterdayStr) {
-                    // 连续登录
+
+                if (gameData.lastRecordDate === yesterdayStr) {
                     gameData.streakDays++;
-                    
-                    // 每3天奖励10金币
                     if (gameData.streakDays % 3 === 0) {
-                        gameData.coins += 10;
-                        alert(`🎉 连续记账${gameData.streakDays}天，奖励10金币！`);
+                        gameData.coins += 20;
+                        showEmotionMessage('🎉 连续记账' + gameData.streakDays + '天，奖励20喵币！');
                     }
                 } else {
-                    // 中断连续登录
                     gameData.streakDays = 1;
                 }
             } else {
-                // 首次登录
                 gameData.streakDays = 1;
             }
-            
-            // 每日登录奖励5金币
-            gameData.coins += 5;
-            gameData.lastLoginDate = today;
+            gameData.todayRewarded = false;
+            gameData.lastRecordDate = today;
             saveGameData();
         }
     }
 
-    // 计算月度称号
-    function calculateMonthlyTitle() {
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth() + 1;
-        const currentMonthStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
-        
-        // 检查是否已经计算过当月称号
-        if (gameData.lastTitleMonth === currentMonthStr) {
-            return document.getElementById('monthlyTitle').textContent;
-        }
-        
-        // 获取上个月的账单
-        const lastMonth = currentMonth === 1 ? 12 : currentMonth - 1;
-        const lastYear = currentMonth === 1 ? currentYear - 1 : currentYear;
-        const lastMonthStr = `${lastYear}-${String(lastMonth).padStart(2, '0')}`;
-        
-        const lastMonthBills = bills.filter(b => b.date.startsWith(lastMonthStr));
-        
-        if (lastMonthBills.length === 0) {
-            gameData.lastTitleMonth = currentMonthStr;
+    // 给予每日首次记账奖励
+    function giveDailyReward() {
+        if (!gameData.todayRewarded) {
+            gameData.coins += 10;
+            gameData.todayRewarded = true;
             saveGameData();
-            return '新手记账人';
+            showEmotionMessage('🎉 每日首次记账，奖励10喵币！');
         }
-        
-        // 计算各分类总支出
-        const categoryTotals = {};
-        let totalExpense = 0;
-        
-        lastMonthBills.forEach(bill => {
-            categoryTotals[bill.category] = (categoryTotals[bill.category] || 0) + bill.amount;
-            totalExpense += bill.amount;
-        });
-        
-        // 找出最高分类
-        let maxCategory = '';
-        let maxAmount = 0;
-        
-        for (const [category, amount] of Object.entries(categoryTotals)) {
-            if (amount > maxAmount) {
-                maxAmount = amount;
-                maxCategory = category;
-            }
-        }
-        
-        // 计算所有月份的平均值
-        const months = [...new Set(bills.map(b => b.date.substring(0, 7)))];
-        let allMonthsTotal = 0;
-        let allMonthsCount = 0;
-        
-        months.forEach(month => {
-            const monthBills = bills.filter(b => b.date.startsWith(month));
-            const monthTotal = monthBills.reduce((sum, b) => sum + b.amount, 0);
-            allMonthsTotal += monthTotal;
-            allMonthsCount++;
-        });
-        
-        const avgExpense = allMonthsCount > 1 ? allMonthsTotal / allMonthsCount : totalExpense / 2;
-        
-        // 确定称号
-        let title = '';
-        
-        // 优先选择消费类别最高的称号
-        switch (maxCategory) {
-            case '交通':
-                title = '风火轮小能手';
-                break;
-            case '餐饮':
-                title = '美食探险家';
-                break;
-            case '购物':
-                title = '剁手党领袖';
-                break;
-            case '学习':
-                title = '学霸の日常';
-                break;
-            case '娱乐':
-                title = '派对动物';
-                break;
-            default:
-                title = '新手记账人';
-        }
-        
-        // 检查是否满足其他称号条件
-        if (totalExpense < avgExpense) {
-            title = '省钱小能手';
-        }
-        
-        if (lastMonthBills.length > 20) {
-            title = '自律记账人';
-        }
-        
-        gameData.lastTitleMonth = currentMonthStr;
-        saveGameData();
-        return title;
     }
 
-    // 渲染家园物品
-    function renderShopItems() {
-        const shopItemsContainer = document.getElementById('shopItems');
-        shopItemsContainer.innerHTML = '';
-        
-        shopItems.forEach(item => {
-            const isPurchased = gameData.purchasedItems.includes(item.id);
-            const itemElement = document.createElement('div');
-            itemElement.className = 'flex justify-between items-center p-3 bg-gray-50 rounded-2xl';
-            itemElement.innerHTML = `
-                <div class="flex items-center gap-3">
-                    <span class="text-2xl">${item.icon}</span>
-                    <div>
-                        <div class="font-medium">${item.name}</div>
-                        <div class="text-sm text-gray-500">${item.price}金币</div>
-                    </div>
-                </div>
-                <button ${isPurchased ? 'disabled' : ''} class="px-4 py-2 rounded-xl ${isPurchased ? 'bg-gray-200 text-gray-500' : 'bg-green-500 text-white hover:bg-green-600'} transition-colors" onclick="purchaseItem('${item.id}')">
-                    ${isPurchased ? '已拥有' : '购买'}
-                </button>
-            `;
-            shopItemsContainer.appendChild(itemElement);
-        });
+    // 显示情绪提示
+    function showEmotionMessage(message) {
+        const emotionMessage = document.getElementById('emotionMessage');
+        const emotionText = document.getElementById('emotionText');
+        emotionText.textContent = message;
+        emotionMessage.classList.remove('hidden');
+        setTimeout(() => {
+            emotionMessage.classList.add('hidden');
+        }, 3000);
+    }
+
+    // 显示猫咪反馈
+    function showCatFeedback(message) {
+        const catFeedback = document.getElementById('catFeedback');
+        const catFeedbackText = document.getElementById('catFeedbackText');
+        catFeedbackText.textContent = message;
+        catFeedback.classList.remove('hidden');
+        setTimeout(() => {
+            catFeedback.classList.add('hidden');
+        }, 2000);
+    }
+
+    // 随机情绪提示
+    function getRandomEmotionMessage(type, category) {
+        if (type === 'income') {
+            return emotionMessages.income[Math.floor(Math.random() * emotionMessages.income.length)];
+        } else if (emotionMessages[category]) {
+            const messages = emotionMessages[category];
+            return messages[Math.floor(Math.random() * messages.length)];
+        } else {
+            return emotionMessages.general[Math.floor(Math.random() * emotionMessages.general.length)];
+        }
+    }
+
+    // 随机猫咪反馈
+    function getRandomCatFeedback() {
+        return catFeedbackMessages[Math.floor(Math.random() * catFeedbackMessages.length)];
     }
 
     // 购买物品
     function purchaseItem(itemId) {
-        const item = shopItems.find(i => i.id === itemId);
+        const item = shopItemsList.find(i => i.id === itemId);
         if (!item) return;
-        
+
         if (gameData.coins < item.price) {
-            alert('金币不足，无法购买！');
+            showEmotionMessage('💰 喵币不足，无法购买！');
             return;
         }
-        
-        if (gameData.purchasedItems.includes(itemId)) {
-            return;
-        }
-        
+
         gameData.coins -= item.price;
-        gameData.purchasedItems.push(itemId);
+        gameData.ownedItems.push(itemId);
         saveGameData();
-        
-        document.getElementById('coinCount').textContent = gameData.coins;
+
+        updateCoinsDisplay();
+        renderHouseItems();
         renderShopItems();
-        
-        alert(`🎉 购买${item.name}成功！`);
+
+        showEmotionMessage(`🎉 购买「${item.name}」成功！`);
+    }
+
+    // 更新喵币显示
+    function updateCoinsDisplay() {
+        document.getElementById('totalCoins').textContent = gameData.coins;
+    }
+
+    // 渲染房屋物品
+    function renderHouseItems() {
+        const container = document.getElementById('houseItems');
+        container.innerHTML = '';
+
+        const itemCounts = {};
+        gameData.ownedItems.forEach(itemId => {
+            itemCounts[itemId] = (itemCounts[itemId] || 0) + 1;
+        });
+
+        Object.entries(itemCounts).forEach(([itemId, count]) => {
+            const item = shopItemsList.find(i => i.id === itemId);
+            if (item) {
+                const div = document.createElement('div');
+                div.className = 'p-3 bg-gray-50 rounded-2xl text-center cursor-pointer hover:bg-gray-100 transition-colors';
+                div.dataset.itemId = itemId;
+                div.innerHTML = `
+                    <div class="text-2xl mb-1">${item.icon}</div>
+                    <div class="font-medium text-sm">${item.name}</div>
+                    <div class="text-xs text-gray-500">×${count}</div>
+                `;
+                container.appendChild(div);
+
+                // 添加点击事件
+                div.addEventListener('click', () => {
+                    selectItemToFeed(itemId);
+                });
+            }
+        });
+    }
+
+    // 渲染商店物品
+    function renderShopItems() {
+        const container = document.getElementById('shopItems');
+        container.innerHTML = '';
+
+        shopItemsList.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'flex justify-between items-center p-4 bg-gray-50 rounded-2xl';
+            div.innerHTML = `
+                <div class="flex items-center gap-3">
+                    <span class="text-3xl">${item.icon}</span>
+                    <div>
+                        <div class="font-semibold">${item.name}</div>
+                        <div class="text-sm text-gray-500">${item.desc}</div>
+                    </div>
+                </div>
+                <button class="px-4 py-2 rounded-xl bg-pink-500 text-white font-semibold hover:bg-pink-600 transition-colors" onclick="purchaseItem('${item.id}')">
+                    ${item.price} 喵币
+                </button>
+            `;
+            container.appendChild(div);
+        });
+    }
+
+    // 选择要喂的物品
+    let selectedItemToFeed = null;
+
+    function selectItemToFeed(itemId) {
+        selectedItemToFeed = itemId;
+        showEmotionMessage('点击猫咪开始喂食～');
+    }
+
+    // 喂猫功能
+    function feedCat() {
+        if (!selectedItemToFeed) {
+            showEmotionMessage('请先选择要喂的道具～');
+            return;
+        }
+
+        if (selectedItemToFeed === '鱼' || selectedItemToFeed === '小鱼干') {
+            const itemIndex = gameData.ownedItems.indexOf(selectedItemToFeed);
+            if (itemIndex === -1) {
+                showEmotionMessage('🐱 没有这个道具了，去商店买吧～');
+                return;
+            }
+            gameData.ownedItems.splice(itemIndex, 1);
+            gameData.catAffection += 1;
+            saveGameData();
+            renderHouseItems();
+            document.getElementById('catAffection').textContent = gameData.catAffection;
+            
+            showCatFeedback(getRandomCatFeedback());
+        } else {
+            showEmotionMessage('🐱 这个不能吃哦！');
+        }
+        selectedItemToFeed = null;
+    }
+
+    // 动态更新二级分类
+    function updateSubCategories(type, categorySelectId, subCategorySelectId) {
+        const typeValue = type || document.getElementById('billType').value;
+        const categorySelect = document.getElementById(categorySelectId);
+        const subCategorySelect = document.getElementById(subCategorySelectId);
+        const selectedCategory = categorySelect.value;
+
+        subCategorySelect.innerHTML = '';
+        const subCategories = categories[typeValue][selectedCategory] || [];
+        subCategories.forEach(sub => {
+            const option = document.createElement('option');
+            option.value = sub;
+            option.textContent = sub;
+            subCategorySelect.appendChild(option);
+        });
     }
 
     // DOM 元素
+    const totalIncomeSpan = document.getElementById('totalIncome');
     const totalExpenseSpan = document.getElementById('totalExpense');
-    const billCountSpan = document.getElementById('billCount');
-    const avgExpenseSpan = document.getElementById('avgExpense');
-    const topCategorySpan = document.getElementById('topCategory');
+    const balanceSpan = document.getElementById('balance');
     const billListContainer = document.getElementById('billListContainer');
     const emptyMsg = document.getElementById('emptyMsg');
     const modal = document.getElementById('modal');
-    const homeModal = document.getElementById('homeModal');
     const modalTitle = document.getElementById('modalTitle');
     const descInput = document.getElementById('desc');
     const amountInput = document.getElementById('amount');
     const categorySelect = document.getElementById('categorySelect');
+    const subCategorySelect = document.getElementById('subCategorySelect');
     const dateInput = document.getElementById('date');
-    const addBtn = document.getElementById('addBtn');
-    const homeBtn = document.getElementById('homeBtn');
-    const cancelModal = document.getElementById('cancelModal');
     const saveBtn = document.getElementById('saveBtn');
-    const closeHomeModal = document.getElementById('closeHomeModal');
+    const typeExpenseBtn = document.getElementById('typeExpense');
+    const typeIncomeBtn = document.getElementById('typeIncome');
+    const billTypeInput = document.getElementById('billType');
+    const monthFilter = document.getElementById('monthFilter');
+    const cat = document.getElementById('cat');
+
+    // 编辑模态框元素
+    const editModal = document.getElementById('modal');
+    const editTypeExpense = document.getElementById('editTypeExpense');
+    const editTypeIncome = document.getElementById('editTypeIncome');
+    const editBillType = document.getElementById('editBillType');
+    const editBillId = document.getElementById('editBillId');
+    const editDesc = document.getElementById('editDesc');
+    const editAmount = document.getElementById('editAmount');
+    const editCategorySelect = document.getElementById('editCategorySelect');
+    const editSubCategorySelect = document.getElementById('editSubCategorySelect');
+    const editDate = document.getElementById('editDate');
+    const cancelModal = document.getElementById('cancelModal');
+    const updateBtn = document.getElementById('updateBtn');
 
     let pieChart = null;
 
-    // 辅助函数：获取当月支出总额、总账单数、平均支出、最多类别
+    // 获取统计信息
     function getStats() {
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth() + 1;
-        const monthBills = bills.filter(b => {
-            const [y,m] = b.date.split('-');
-            return parseInt(y) === currentYear && parseInt(m) === currentMonth;
-        });
-        const total = monthBills.reduce((sum, b) => sum + b.amount, 0);
-        const count = monthBills.length;
-        const avg = count === 0 ? 0 : (total / count).toFixed(1);
-        // 计算类别支出总额
-        const catMap = new Map();
-        monthBills.forEach(b => { catMap.set(b.category, (catMap.get(b.category)||0) + b.amount); });
-        let topCat = "无";
-        let maxAmt = 0;
-        for(let [cat, amt] of catMap.entries()) {
-            if(amt > maxAmt) { maxAmt = amt; topCat = cat; }
-        }
-        return { total, count, avg, topCat };
+        const totalIncome = bills.filter(b => b.type === 'income').reduce((sum, b) => sum + b.amount, 0);
+        const totalExpense = bills.filter(b => b.type === 'expense').reduce((sum, b) => sum + b.amount, 0);
+        return { totalIncome, totalExpense, balance: totalIncome - totalExpense };
     }
 
-    // 更新所有UI
+    // 更新UI
     function refreshUI() {
-        // 更新头部统计
-        const stats = getStats();
-        totalExpenseSpan.innerText = stats.total.toFixed(2);
-        billCountSpan.innerText = stats.count;
-        avgExpenseSpan.innerText = `¥${stats.avg}`;
-        topCategorySpan.innerText = stats.topCat;
+        const { totalIncome, totalExpense, balance } = getStats();
+        totalIncomeSpan.textContent = totalIncome.toLocaleString();
+        totalExpenseSpan.textContent = totalExpense.toLocaleString();
+        balanceSpan.textContent = balance.toLocaleString();
 
-        // 更新月度称号
-        const title = calculateMonthlyTitle();
-        document.getElementById('monthlyTitle').textContent = title;
+        updateCoinsDisplay();
+        updateMonthFilter();
+        renderBillList();
+        updateChart();
+    }
 
-        // 渲染账单列表（全部账单，不限当月）
-        if(bills.length === 0) {
+    // 更新月份筛选器
+    function updateMonthFilter() {
+        const months = [...new Set(bills.map(b => b.date.substring(0, 7)))].sort().reverse();
+        const currentValue = monthFilter.value;
+        monthFilter.innerHTML = '<option value="">全部月份</option>';
+        months.forEach(month => {
+            const option = document.createElement('option');
+            option.value = month;
+            option.textContent = month;
+            monthFilter.appendChild(option);
+        });
+        monthFilter.value = currentValue;
+    }
+
+    // 渲染账单列表
+    function renderBillList() {
+        let filteredBills = [...bills].sort((a, b) => new Date(b.date) - new Date(a.date));
+        
+        if (monthFilter.value) {
+            filteredBills = filteredBills.filter(b => b.date.startsWith(monthFilter.value));
+        }
+
+        if (filteredBills.length === 0) {
             billListContainer.innerHTML = '';
             emptyMsg.classList.remove('hidden');
         } else {
             emptyMsg.classList.add('hidden');
-            billListContainer.innerHTML = bills.map(bill => `
-                <div class="flex justify-between items-center py-4 border-b border-gray-50 bill-item">
-                    <div class="flex items-center gap-4">
-                        <div class="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center">
+            billListContainer.innerHTML = filteredBills.map(bill => `
+                <div class="bill-item flex justify-between items-center p-4 border-b border-gray-50 cursor-pointer transition-colors rounded-xl mb-2" onclick="openEditModal(${bill.id})">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl flex items-center justify-center text-lg ${bill.type === 'income' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}">
                             ${getCategoryIcon(bill.category)}
                         </div>
                         <div>
-                            <div class="font-medium text-gray-800">${escapeHtml(bill.desc)}</div>
-                            <div class="text-sm text-gray-400">${bill.date}</div>
+                            <div class="font-medium text-gray-800">${bill.desc}</div>
+                            <div class="text-sm text-gray-400">${bill.date} · ${bill.category} · ${bill.subCategory}</div>
                         </div>
                     </div>
-                    <div class="flex items-center">
-                        <div class="font-semibold text-red-500 mr-4">¥${bill.amount.toFixed(2)}</div>
-                        <div class="flex gap-3">
-                            <button onclick="editBill(${bill.id})" class="text-gray-400 hover:text-blue-500 transition-colors">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                            <button onclick="deleteBill(${bill.id})" class="text-gray-400 hover:text-red-500 transition-colors">
-                                <i class="fas fa-trash-alt"></i>
-                            </button>
-                        </div>
+                    <div class="text-right">
+                        <div class="font-semibold ${bill.type === 'income' ? 'text-green-600' : 'text-red-500'}">${bill.type === 'income' ? '+' : '-'}${bill.amount.toLocaleString()}</div>
                     </div>
                 </div>
             `).join('');
         }
-
-        // 更新饼图（按类别汇总当月支出）
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth() + 1;
-        const monthBills = bills.filter(b => {
-            const [y,m] = b.date.split('-');
-            return parseInt(y) === currentYear && parseInt(m) === currentMonth;
-        });
-        const catMap = new Map();
-        monthBills.forEach(b => { catMap.set(b.category, (catMap.get(b.category)||0) + b.amount); });
-        const pieData = Array.from(catMap.entries()).map(([name, value]) => ({ name, value }));
-        if(pieChart) {
-            pieChart.setOption({
-                color: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#6b7280'],
-                series: [{
-                    data: pieData,
-                    label: { show: true, formatter: '{b}: {d}%' }
-                }]
-            });
-        }
     }
 
-    function getCategoryIcon(cat) {
-        const map = { 
-            '餐饮': '<i class="fas fa-utensils text-blue-500"></i>',
-            '购物': '<i class="fas fa-shopping-bag text-green-500"></i>',
-            '娱乐': '<i class="fas fa-film text-orange-500"></i>',
-            '交通': '<i class="fas fa-car text-purple-500"></i>',
-            '学习': '<i class="fas fa-book text-pink-500"></i>',
-            '其他': '<i class="fas fa-box text-gray-500"></i>'
+    function getCategoryIcon(category) {
+        const icons = {
+            '薪资奖金': '💰', '兼职外快': '💼', '红包礼金': '🎁', '退款报销': '🔄', '其他收入': '📈',
+            '餐饮': '🍜', '购物': '🛍️', '娱乐': '🎬', '交通': '🚗', '学习': '📚', '宠物': '🐱', '其他支出': '📦'
         };
-        return map[cat] || '<i class="fas fa-box text-gray-500"></i>';
+        return icons[category] || '📦';
     }
 
-    function escapeHtml(str) {
-        return str.replace(/[&<>]/g, function(m) {
-            if(m === '&') return '&amp;';
-            if(m === '<') return '&lt;';
-            if(m === '>') return '&gt;';
-            return m;
+    // 更新图表
+    function updateChart() {
+        const expenseBills = bills.filter(b => b.type === 'expense');
+        const categoryTotals = {};
+        expenseBills.forEach(bill => {
+            categoryTotals[bill.category] = (categoryTotals[bill.category] || 0) + bill.amount;
         });
+
+        const categories = Object.keys(categoryTotals);
+        const data = categories.map(cat => ({
+            name: cat + ' ' + getCategoryIcon(cat),
+            value: categoryTotals[cat]
+        }));
+
+        if (!pieChart) {
+            pieChart = echarts.init(document.getElementById('pieChart'));
+        }
+
+        const option = {
+            tooltip: { trigger: 'item', formatter: '{b}: ¥{c} ({d}%)' },
+            legend: { bottom: '5%', left: 'center' },
+            color: ['#f472b6', '#fb923c', '#fbbf24', '#a3e635', '#34d399', '#22d3ee', '#818cf8', '#c084fc'],
+            series: [{
+                type: 'pie',
+                radius: ['40%', '70%'],
+                avoidLabelOverlap: false,
+                itemStyle: { borderRadius: 10, borderColor: '#fff', borderWidth: 2 },
+                label: { show: false },
+                emphasis: { label: { show: true, fontSize: 14 } },
+                data: data
+            }]
+        };
+
+        pieChart.setOption(option);
     }
 
-    // 增删改逻辑
-    window.deleteBill = function(id) {
-        if(confirm('确定删除这笔账单吗？')) {
-            bills = bills.filter(b => b.id !== id);
-            saveBillData();
-            refreshUI();
-        }
-    };
-
-    window.editBill = function(id) {
-        const bill = bills.find(b => b.id === id);
-        if(bill) {
-            editingId = id;
-            modalTitle.innerText = '编辑账单';
-            descInput.value = bill.desc;
-            amountInput.value = bill.amount;
-            categorySelect.value = bill.category;
-            dateInput.value = bill.date;
-            modal.classList.remove('hidden');
-        }
-    };
-
+    // 保存账单
     function saveBill() {
         const desc = descInput.value.trim();
         const amount = parseFloat(amountInput.value);
         const category = categorySelect.value;
+        const subCategory = subCategorySelect.value;
         const date = dateInput.value;
-        if(!desc || isNaN(amount) || amount <= 0 || !date) {
-            alert('请完整填写信息');
-            return;
-        }
-        
-        if(editingId !== null) {
-            // 编辑
-            const index = bills.findIndex(b => b.id === editingId);
-            if(index !== -1) {
-                bills[index] = { ...bills[index], desc, amount, category, date };
-            }
-            editingId = null;
-        } else {
-            // 新增
-            bills.push({ id: nextId++, desc, amount, category, date });
-            
-            // 奖励金币
-            const coinsEarned = Math.floor(amount / 10);
-            if (coinsEarned > 0) {
-                gameData.coins += coinsEarned;
-                saveGameData();
-                alert(`🎉 添加账单成功，获得${coinsEarned}金币！`);
-            }
-        }
-        
-        saveBillData();
-        closeModal();
-        refreshUI();
-    }
+        const type = billTypeInput.value;
 
-    function openAddModal() {
-        editingId = null;
-        modalTitle.innerText = '添加账单';
+        if (!desc) { showEmotionMessage('请输入描述'); return; }
+        if (isNaN(amount) || amount <= 0) { showEmotionMessage('请输入有效金额'); return; }
+        if (!date) { showEmotionMessage('请选择日期'); return; }
+
+        giveDailyReward();
+
+        bills.push({ id: nextId++, desc, amount, type, category, subCategory, date });
+        showEmotionMessage(getRandomEmotionMessage(type, category));
+
+        saveBillData();
+        refreshUI();
+        
+        // 重置表单
         descInput.value = '';
         amountInput.value = '';
-        categorySelect.value = '餐饮';
-        const today = new Date().toISOString().slice(0,10);
-        dateInput.value = today;
+        dateInput.value = new Date().toISOString().split('T')[0];
+    }
+
+    // 打开编辑模态框
+    function openEditModal(id) {
+        const bill = bills.find(b => b.id === id);
+        if (!bill) return;
+
+        editingId = id;
+        editBillId.value = id;
+        editDesc.value = bill.desc;
+        editAmount.value = bill.amount;
+        editBillType.value = bill.type;
+        editDate.value = bill.date;
+
+        // 更新分类选项
+        updateEditCategoryOptions(bill.type);
+        editCategorySelect.value = bill.category;
+        updateSubCategories(bill.type, 'editCategorySelect', 'editSubCategorySelect');
+        editSubCategorySelect.value = bill.subCategory;
+
+        if (bill.type === 'income') {
+            editTypeIncome.className = 'flex-1 p-3 rounded-2xl font-semibold transition-colors bg-green-500 text-white';
+            editTypeExpense.className = 'flex-1 p-3 rounded-2xl font-semibold transition-colors bg-gray-100 text-gray-600';
+        } else {
+            editTypeExpense.className = 'flex-1 p-3 rounded-2xl font-semibold transition-colors bg-green-500 text-white';
+            editTypeIncome.className = 'flex-1 p-3 rounded-2xl font-semibold transition-colors bg-gray-100 text-gray-600';
+        }
+
         modal.classList.remove('hidden');
     }
 
-    function closeModal() {
-        modal.classList.add('hidden');
-    }
+    // 更新编辑模态框分类选项
+    function updateEditCategoryOptions(type) {
+        const categorySelect = document.getElementById('editCategorySelect');
+        categorySelect.innerHTML = '';
 
-    function openHomeModal() {
-        document.getElementById('coinCount').textContent = gameData.coins;
-        document.getElementById('streakDays').textContent = gameData.streakDays;
-        renderShopItems();
-        homeModal.classList.remove('hidden');
-    }
-
-    function closeHomeModalFunc() {
-        homeModal.classList.add('hidden');
-    }
-
-    addBtn.onclick = openAddModal;
-    homeBtn.onclick = openHomeModal;
-    cancelModal.onclick = closeModal;
-    saveBtn.onclick = saveBill;
-    closeHomeModal.onclick = closeHomeModalFunc;
-    window.onclick = function(e) {
-        if(e.target === modal) closeModal();
-        if(e.target === homeModal) closeHomeModalFunc();
-    };
-
-    // 初始化图表
-    function initChart() {
-        const dom = document.getElementById('pieChart');
-        pieChart = echarts.init(dom);
-        pieChart.setOption({
-            tooltip: { trigger: 'item' },
-            legend: { top: 'bottom' },
-            color: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#6b7280'],
-            series: [{
-                type: 'pie',
-                radius: '55%',
-                data: [],
-                emphasis: { scale: true },
-                label: { show: true, formatter: '{b}: {d}%' }
-            }]
+        Object.keys(categories[type]).forEach(category => {
+            const option = document.createElement('option');
+            option.value = category;
+            option.textContent = getCategoryIcon(category) + ' ' + category;
+            categorySelect.appendChild(option);
         });
     }
 
-    // 启动
+    // 关闭编辑模态框
+    function closeEditModal() {
+        modal.classList.add('hidden');
+        editingId = null;
+    }
+
+    // 更新账单
+    function updateBill() {
+        const id = parseInt(editBillId.value);
+        const desc = editDesc.value.trim();
+        const amount = parseFloat(editAmount.value);
+        const category = editCategorySelect.value;
+        const subCategory = editSubCategorySelect.value;
+        const date = editDate.value;
+        const type = editBillType.value;
+
+        if (!desc) { showEmotionMessage('请输入描述'); return; }
+        if (isNaN(amount) || amount <= 0) { showEmotionMessage('请输入有效金额'); return; }
+        if (!date) { showEmotionMessage('请选择日期'); return; }
+
+        const index = bills.findIndex(b => b.id === id);
+        if (index !== -1) {
+            bills[index] = { ...bills[index], desc, amount, type, category, subCategory, date };
+            saveBillData();
+            refreshUI();
+            closeEditModal();
+            showEmotionMessage('🎉 账单更新成功！');
+        }
+    }
+
+    // 删除账单
+    function deleteBill(id) {
+        if (!confirm('确定删除这条账单吗？')) return;
+        bills = bills.filter(b => b.id !== id);
+        saveBillData();
+        refreshUI();
+        showEmotionMessage('🗑️ 账单已删除');
+    }
+
+    // 事件绑定
+    saveBtn.addEventListener('click', saveBill);
+    cancelModal.addEventListener('click', closeEditModal);
+    updateBtn.addEventListener('click', updateBill);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeEditModal(); });
+    monthFilter.addEventListener('change', renderBillList);
+    categorySelect.addEventListener('change', () => updateSubCategories(null, 'categorySelect', 'subCategorySelect'));
+    editCategorySelect.addEventListener('change', () => updateSubCategories(editBillType.value, 'editCategorySelect', 'editSubCategorySelect'));
+
+    typeExpenseBtn.addEventListener('click', () => {
+        billTypeInput.value = 'expense';
+        typeExpenseBtn.className = 'flex-1 p-3 rounded-2xl font-semibold transition-colors bg-green-500 text-white';
+        typeIncomeBtn.className = 'flex-1 p-3 rounded-2xl font-semibold transition-colors bg-gray-100 text-gray-600';
+        // 更新分类选项
+        categorySelect.innerHTML = '';
+        Object.keys(categories.expense).forEach(category => {
+            const option = document.createElement('option');
+            option.value = category;
+            option.textContent = getCategoryIcon(category) + ' ' + category;
+            categorySelect.appendChild(option);
+        });
+        updateSubCategories('expense', 'categorySelect', 'subCategorySelect');
+    });
+
+    typeIncomeBtn.addEventListener('click', () => {
+        billTypeInput.value = 'income';
+        typeIncomeBtn.className = 'flex-1 p-3 rounded-2xl font-semibold transition-colors bg-green-500 text-white';
+        typeExpenseBtn.className = 'flex-1 p-3 rounded-2xl font-semibold transition-colors bg-gray-100 text-gray-600';
+        // 更新分类选项
+        categorySelect.innerHTML = '';
+        Object.keys(categories.income).forEach(category => {
+            const option = document.createElement('option');
+            option.value = category;
+            option.textContent = getCategoryIcon(category) + ' ' + category;
+            categorySelect.appendChild(option);
+        });
+        updateSubCategories('income', 'categorySelect', 'subCategorySelect');
+    });
+
+    editTypeExpense.addEventListener('click', () => {
+        editBillType.value = 'expense';
+        editTypeExpense.className = 'flex-1 p-3 rounded-2xl font-semibold transition-colors bg-green-500 text-white';
+        editTypeIncome.className = 'flex-1 p-3 rounded-2xl font-semibold transition-colors bg-gray-100 text-gray-600';
+        updateEditCategoryOptions('expense');
+        updateSubCategories('expense', 'editCategorySelect', 'editSubCategorySelect');
+    });
+
+    editTypeIncome.addEventListener('click', () => {
+        editBillType.value = 'income';
+        editTypeIncome.className = 'flex-1 p-3 rounded-2xl font-semibold transition-colors bg-green-500 text-white';
+        editTypeExpense.className = 'flex-1 p-3 rounded-2xl font-semibold transition-colors bg-gray-100 text-gray-600';
+        updateEditCategoryOptions('income');
+        updateSubCategories('income', 'editCategorySelect', 'editSubCategorySelect');
+    });
+
+    // 猫咪点击事件
+    cat.addEventListener('click', feedCat);
+
+    window.addEventListener('resize', () => { if (pieChart) pieChart.resize(); });
+
+    // 初始化
     loadData();
-    initChart();
     refreshUI();
+    renderHouseItems();
+    renderShopItems();
+    document.getElementById('catAffection').textContent = gameData.catAffection;
+    dateInput.value = new Date().toISOString().split('T')[0];
 </script>
 </body>
 </html>
