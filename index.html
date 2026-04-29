@@ -176,6 +176,36 @@
     </div>
 </div>
 
+<!-- AI理财建议按钮 -->
+<button id="aiAdvisorBtn" class="fixed bottom-24 right-5 w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full shadow-lg flex flex-col items-center justify-center text-white hover:scale-110 transition-transform z-40">
+    <span class="text-2xl">🤖</span>
+    <span class="text-xs mt-1">理财顾问</span>
+</button>
+
+<!-- AI理财建议模态框 -->
+<div id="aiModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-3xl w-[90%] max-w-[400px] p-6 shadow-xl">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-xl font-semibold text-gray-800">🤖 AI理财顾问（模拟）</h3>
+            <button id="closeAiModal" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+        </div>
+        <div id="aiContent" class="min-h-[200px]">
+            <!-- 加载状态 -->
+            <div id="aiLoading" class="flex flex-col items-center justify-center py-8">
+                <div class="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                <p class="mt-4 text-gray-500">AI正在分析您的财务数据...</p>
+            </div>
+            <!-- 建议内容 -->
+            <div id="aiSuggestions" class="hidden">
+                <div id="suggestionText" class="text-gray-700 whitespace-pre-line leading-relaxed"></div>
+            </div>
+        </div>
+        <button id="closeAiBtn" class="w-full mt-6 p-3 rounded-2xl bg-blue-500 text-white font-semibold hover:bg-blue-600 transition-colors">
+            关闭
+        </button>
+    </div>
+</div>
+
 <!-- 编辑模态框 -->
 <div id="modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
     <div class="bg-white rounded-3xl w-[85%] max-w-[350px] p-6 shadow-xl">
@@ -871,6 +901,133 @@
     cat.addEventListener('click', feedCat);
 
     window.addEventListener('resize', () => { if (pieChart) pieChart.resize(); });
+
+    // ---------------- AI 理财顾问功能 ----------------
+
+    // 获取最近30天的账单数据
+    function getRecentBills(days = 30) {
+        const today = new Date();
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(today.getDate() - days);
+        
+        return bills.filter(bill => {
+            const billDate = new Date(bill.date);
+            return billDate >= thirtyDaysAgo && billDate <= today;
+        });
+    }
+
+    // 生成理财建议（基于真实账单数据动态生成）
+    function generateSuggestions(recentBills) {
+        const incomeBills = recentBills.filter(b => b.type === 'income');
+        const expenseBills = recentBills.filter(b => b.type === 'expense');
+        
+        const totalIncome = incomeBills.reduce((sum, b) => sum + b.amount, 0);
+        const totalExpense = expenseBills.reduce((sum, b) => sum + b.amount, 0);
+        
+        // 按类别统计支出
+        const categoryTotals = {};
+        expenseBills.forEach(bill => {
+            categoryTotals[bill.category] = (categoryTotals[bill.category] || 0) + bill.amount;
+        });
+        
+        // 计算记账天数
+        const recordDates = [...new Set(recentBills.map(b => b.date))];
+        const recordDays = recordDates.length;
+        
+        // 找出支出最多的类别
+        let maxCategory = '';
+        let maxAmount = 0;
+        Object.entries(categoryTotals).forEach(([category, amount]) => {
+            if (amount > maxAmount) {
+                maxAmount = amount;
+                maxCategory = category;
+            }
+        });
+        
+        // 计算储蓄率
+        const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpense) / totalIncome * 100).toFixed(1) : 0;
+        
+        // 生成动态建议
+        const suggestions = [];
+        
+        // 建议1：基于支出最高类别
+        if (maxCategory) {
+            const maxPercentage = totalExpense > 0 ? ((maxAmount / totalExpense) * 100).toFixed(1) : 0;
+            const weeklyBudget = Math.floor(maxAmount / 4);
+            suggestions.push(`💰 支出优化：您的${maxCategory}支出最高，最近30天共花费¥${maxAmount.toLocaleString()}，占总支出的${maxPercentage}%。建议设置每周${maxCategory}预算不超过¥${weeklyBudget.toLocaleString()}，有效控制开销。`);
+        }
+        
+        // 建议2：基于记账频率的鼓励
+        const frequencyMsg = recordDays >= 20 ? '非常棒！' : recordDays >= 10 ? '继续加油！' : '坚持下去！';
+        suggestions.push(`📝 记账习惯：${frequencyMsg}最近30天您有${recordDays}天记录了账单，保持良好的记账习惯是理财的第一步！`);
+        
+        // 建议3：基于储蓄比例的建议
+        if (totalIncome > 0) {
+            let savingsAdvice = '';
+            if (savingsRate >= 30) {
+                savingsAdvice = '您的储蓄率非常健康，继续保持！';
+            } else if (savingsRate >= 20) {
+                savingsAdvice = '储蓄率不错，可以尝试再提高一些！';
+            } else if (savingsRate >= 10) {
+                savingsAdvice = '建议适当减少非必要支出，提高储蓄比例。';
+            } else if (totalExpense > totalIncome) {
+                savingsAdvice = '本月支出超过收入，请留意开销！';
+            } else {
+                savingsAdvice = '建议设定储蓄目标，比如每月存下收入的20%。';
+            }
+            suggestions.push(`💸 储蓄建议：本月储蓄率${savingsRate}%（总收入¥${totalIncome.toLocaleString()}，总支出¥${totalExpense.toLocaleString()}）。${savingsAdvice}`);
+        } else {
+            suggestions.push(`💸 储蓄建议：目前暂无收入记录，建议先记录您的收入来源，以便更好地规划财务。`);
+        }
+        
+        return suggestions.join('\n\n');
+    }
+
+    // 显示 AI 理财顾问模态框
+    function openAiModal() {
+        const aiModal = document.getElementById('aiModal');
+        const aiLoading = document.getElementById('aiLoading');
+        const aiSuggestions = document.getElementById('aiSuggestions');
+        const suggestionText = document.getElementById('suggestionText');
+        
+        // 显示模态框和加载状态
+        aiModal.classList.remove('hidden');
+        aiLoading.classList.remove('hidden');
+        aiSuggestions.classList.add('hidden');
+        
+        // 获取最近30天数据并生成建议
+        const recentBills = getRecentBills(30);
+        
+        if (recentBills.length === 0) {
+            aiLoading.classList.add('hidden');
+            aiSuggestions.classList.remove('hidden');
+            suggestionText.textContent = '暂无足够的账单数据来生成理财建议，请先添加一些账单记录。';
+            return;
+        }
+        
+        // 生成模拟建议（基于真实数据动态生成）
+        setTimeout(() => {
+            const suggestions = generateSuggestions(recentBills);
+            aiLoading.classList.add('hidden');
+            aiSuggestions.classList.remove('hidden');
+            suggestionText.textContent = suggestions;
+        }, 1200); // 模拟加载延迟
+    }
+
+    // 关闭 AI 模态框
+    function closeAiModal() {
+        document.getElementById('aiModal').classList.add('hidden');
+    }
+
+    // AI 理财建议事件绑定
+    document.getElementById('aiAdvisorBtn').addEventListener('click', openAiModal);
+    document.getElementById('closeAiModal').addEventListener('click', closeAiModal);
+    document.getElementById('closeAiBtn').addEventListener('click', closeAiModal);
+    document.getElementById('aiModal').addEventListener('click', (e) => {
+        if (e.target === document.getElementById('aiModal')) {
+            closeAiModal();
+        }
+    });
 
     // 初始化
     loadData();
