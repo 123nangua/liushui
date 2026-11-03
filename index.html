@@ -26,8 +26,45 @@
             to { transform: scale(1); opacity: 1; }
         }
     </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body class="bg-[#fef2f2] p-5">
+
+<!-- 登录遮罩层（未登录时显示） -->
+<div id="loginOverlay" class="fixed inset-0 bg-gradient-to-br from-pink-100 via-purple-100 to-blue-100 z-[100] flex items-center justify-center">
+    <div class="bg-white rounded-3xl w-[90%] max-w-[380px] p-8 shadow-2xl">
+        <div class="text-center mb-6">
+            <div class="w-16 h-16 bg-pink-500 rounded-2xl flex items-center justify-center text-white text-3xl mx-auto mb-4 shadow-lg">
+                <i class="fas fa-wallet"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-gray-800">智析流水</h2>
+            <p class="text-gray-500 text-sm mt-2">智能记账，让财务管理更简单</p>
+        </div>
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">邮箱地址</label>
+            <input type="email" id="loginEmail" placeholder="your@email.com" class="w-full p-4 border border-gray-200 rounded-2xl text-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-transparent">
+        </div>
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">密码</label>
+            <input type="password" id="loginPassword" placeholder="至少 6 位" class="w-full p-4 border border-gray-200 rounded-2xl text-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-transparent">
+        </div>
+        <div class="flex gap-3">
+            <button id="signInBtn" class="flex-1 p-4 rounded-2xl bg-pink-500 text-white font-semibold cursor-pointer hover:bg-pink-600 transition-colors flex items-center justify-center gap-2">
+                <i class="fas fa-sign-in-alt"></i>
+                登录
+            </button>
+            <button id="signUpBtn" class="flex-1 p-4 rounded-2xl bg-white border-2 border-pink-500 text-pink-500 font-semibold cursor-pointer hover:bg-pink-50 transition-colors flex items-center justify-center gap-2">
+                <i class="fas fa-user-plus"></i>
+                注册
+            </button>
+        </div>
+        <p id="loginTip" class="text-center text-sm text-gray-400 mt-4 hidden"></p>
+        <p class="text-center text-xs text-gray-400 mt-6">
+            🔒 登录后数据将同步到云端，多设备可用
+        </p>
+    </div>
+</div>
+
 <div class="container mx-auto max-w-3xl">
     <!-- 情绪提示框 -->
     <div id="emotionMessage" class="fixed top-4 left-1/2 transform -translate-x-1/2 bg-white rounded-2xl p-4 shadow-lg z-50 hidden emotion-message">
@@ -47,16 +84,23 @@
 
     <!-- 头部卡片 -->
     <div class="bg-white rounded-3xl p-6 mb-6 shadow-sm">
-        <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 bg-pink-500 rounded-2xl flex items-center justify-center text-white">
                     <i class="fas fa-wallet text-lg"></i>
                 </div>
                 <h1 class="text-2xl font-bold text-gray-800">智析流水</h1>
             </div>
-            <div class="flex items-center gap-2 bg-yellow-100 px-4 py-2 rounded-2xl">
-                <i class="fas fa-coins text-yellow-500"></i>
-                <span class="font-bold text-gray-700">喵币: <span id="totalCoins">0</span></span>
+            <div class="flex items-center gap-2">
+                <div id="userInfoArea" class="hidden items-center gap-2 bg-blue-50 px-3 py-2 rounded-2xl">
+                    <i class="fas fa-user-circle text-blue-500"></i>
+                    <span id="userEmail" class="text-sm text-gray-700 max-w-[140px] truncate"></span>
+                    <button id="signOutBtn" class="text-xs text-blue-500 hover:text-blue-700 font-medium ml-1">退出</button>
+                </div>
+                <div class="flex items-center gap-2 bg-yellow-100 px-4 py-2 rounded-2xl">
+                    <i class="fas fa-coins text-yellow-500"></i>
+                    <span class="font-bold text-gray-700">喵币: <span id="totalCoins">0</span></span>
+                </div>
             </div>
         </div>
         <div class="grid grid-cols-3 gap-4">
@@ -233,12 +277,17 @@
 </div>
 
 <script>
-    // ---------- 数据存储 (localStorage) ----------
-    let bills = [];
-    let nextId = 1;
-    let editingId = null;
+    // ---------- Supabase 初始化 ----------
+    const SUPABASE_URL = 'https://oonxzxqbeeivssdouhyq.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_7cdSug2eIfDp2VvXvTL-AQ_GTkbKPAE';
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // 游戏化数据 - 喵币系统
+    // ---------- 状态 ----------
+    let bills = [];
+    let editingId = null;
+    let currentUser = null;
+
+    // 游戏化数据 - 喵币系统（保留在 localStorage）
     let gameData = {
         coins: 100,
         streakDays: 0,
@@ -327,53 +376,169 @@
         '我超满足的！✨'
     ];
 
-    // 从localStorage加载数据
-    function loadData() {
-        const storedBills = localStorage.getItem('bills');
-        const storedNextId = localStorage.getItem('nextId');
-        if (storedBills) {
-            bills = JSON.parse(storedBills);
+    // ---------- 字段名映射辅助 ----------
+    function mapFromDB(row) {
+        return {
+            id: row.id,
+            desc: row.description,
+            amount: row.amount,
+            type: row.type,
+            category: row.category,
+            subCategory: row.subcategory,
+            date: row.date
+        };
+    }
+
+    function mapToDB(bill) {
+        return {
+            description: bill.desc,
+            amount: bill.amount,
+            type: bill.type,
+            category: bill.category,
+            subcategory: bill.subCategory,
+            date: bill.date
+        };
+    }
+
+    // ---------- Auth 相关 ----------
+    function showLoginOverlay() {
+        document.getElementById('loginOverlay').classList.remove('hidden');
+    }
+
+    function hideLoginOverlay() {
+        document.getElementById('loginOverlay').classList.add('hidden');
+    }
+
+    function showUserInfo(email) {
+        const area = document.getElementById('userInfoArea');
+        area.classList.remove('hidden');
+        area.classList.add('flex');
+        document.getElementById('userEmail').textContent = email;
+    }
+
+    function hideUserInfo() {
+        const area = document.getElementById('userInfoArea');
+        area.classList.add('hidden');
+        area.classList.remove('flex');
+        document.getElementById('userEmail').textContent = '';
+    }
+
+    async function checkAuth() {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session) {
+            currentUser = session.user;
+            hideLoginOverlay();
+            showUserInfo(currentUser.email);
+            return true;
         } else {
-            // 预置至少5条账单（最近一周）
-            const today = new Date();
-            const todayStr = today.toISOString().split('T')[0];
-            const yesterday = new Date(today);
-            yesterday.setDate(yesterday.getDate() - 1);
-            const yesterdayStr = yesterday.toISOString().split('T')[0];
-            const twoDaysAgo = new Date(today);
-            twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
-            const twoDaysAgoStr = twoDaysAgo.toISOString().split('T')[0];
-            const threeDaysAgo = new Date(today);
-            threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-            const threeDaysAgoStr = threeDaysAgo.toISOString().split('T')[0];
-
-            bills = [
-                { id: 1, desc: "工资", amount: 5000, type: "income", category: "薪资奖金", subCategory: "工资", date: threeDaysAgoStr },
-                { id: 2, desc: "午餐", amount: 45, type: "expense", category: "餐饮", subCategory: "正餐", date: twoDaysAgoStr },
-                { id: 3, desc: "打车", amount: 30, type: "expense", category: "交通", subCategory: "打车", date: twoDaysAgoStr },
-                { id: 4, desc: "买书", amount: 89, type: "expense", category: "学习", subCategory: "书籍", date: yesterdayStr },
-                { id: 5, desc: "奖金", amount: 1000, type: "income", category: "薪资奖金", subCategory: "奖金", date: todayStr }
-            ];
-            nextId = 6;
-            saveBillData();
+            currentUser = null;
+            showLoginOverlay();
+            hideUserInfo();
+            return false;
         }
-        if (storedNextId) {
-            nextId = parseInt(storedNextId);
+    }
+
+    function showTip(msg, type) {
+        const tip = document.getElementById('loginTip');
+        tip.classList.remove('hidden', 'text-red-500', 'text-green-500');
+        tip.textContent = msg;
+        if (type === 'error') tip.classList.add('text-red-500');
+        if (type === 'success') tip.classList.add('text-green-500');
+        clearTimeout(tip._timer);
+        tip._timer = setTimeout(() => { tip.classList.add('hidden'); }, 5000);
+    }
+
+    async function signIn() {
+        const email = document.getElementById('loginEmail').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        if (!email || !password) { showTip('请输入邮箱和密码', 'error'); return; }
+
+        const btn = document.getElementById('signInBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 登录中...';
+
+        try {
+            const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+            if (error) {
+                showTip('登录失败：' + error.message, 'error');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> 登录';
+                return;
+            }
+            showTip('✅ 登录成功', 'success');
+            location.reload();
+        } catch (err) {
+            showTip('登录出错，请稍后再试', 'error');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> 登录';
+        }
+    }
+
+    async function signUp() {
+        const email = document.getElementById('loginEmail').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        if (!email || !password) { showTip('请输入邮箱和密码', 'error'); return; }
+        if (password.length < 6) { showTip('密码至少 6 位', 'error'); return; }
+
+        const btn = document.getElementById('signUpBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 注册中...';
+
+        try {
+            const { error } = await supabaseClient.auth.signUp({ email, password });
+            if (error) {
+                showTip('注册失败：' + error.message, 'error');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-user-plus"></i> 注册';
+                return;
+            }
+            showTip('✅ 注册成功，请登录', 'success');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-user-plus"></i> 注册';
+        } catch (err) {
+            showTip('注册出错，请稍后再试', 'error');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-user-plus"></i> 注册';
+        }
+    }
+
+    async function signOut() {
+        const { error } = await supabaseClient.auth.signOut();
+        if (error) {
+            console.error('退出失败:', error.message);
+            return;
+        }
+        currentUser = null;
+        bills = [];
+        hideUserInfo();
+        showLoginOverlay();
+    }
+
+    // ---------- 从 Supabase 加载账单 ----------
+    async function loadBillsFromSupabase() {
+        const { data, error } = await supabaseClient
+            .from('bills')
+            .select('*')
+            .order('date', { ascending: false });
+
+        if (error) {
+            console.error('加载账单失败:', error.message);
+            alert('加载账单失败: ' + error.message);
+            return;
         }
 
+        bills = data.map(mapFromDB);
+    }
+
+    // 加载游戏化数据（保留 localStorage）
+    function loadGameData() {
         const storedGameData = localStorage.getItem('gameData');
         if (storedGameData) {
             gameData = { ...gameData, ...JSON.parse(storedGameData) };
         } else {
             saveGameData();
         }
-
         checkDailyRecord();
-    }
-
-    function saveBillData() {
-        localStorage.setItem('bills', JSON.stringify(bills));
-        localStorage.setItem('nextId', nextId.toString());
     }
 
     function saveGameData() {
@@ -735,7 +900,7 @@
     }
 
     // 保存账单
-    function saveBill() {
+    async function saveBill() {
         const desc = descInput.value.trim();
         const amount = parseFloat(amountInput.value);
         const category = categorySelect.value;
@@ -747,15 +912,27 @@
         if (isNaN(amount) || amount <= 0) { showEmotionMessage('请输入有效金额'); return; }
         if (!date) { showEmotionMessage('请选择日期'); return; }
 
+        const billToInsert = mapToDB({ desc, amount, type, category, subCategory, date });
+
+        const { data, error } = await supabaseClient
+            .from('bills')
+            .insert([billToInsert])
+            .select();
+
+        if (error) {
+            console.error('保存账单失败:', error.message);
+            alert('保存账单失败: ' + error.message);
+            return;
+        }
+
+        if (data) {
+            bills.unshift(mapFromDB(data[0]));
+        }
+
         giveDailyReward();
-
-        bills.push({ id: nextId++, desc, amount, type, category, subCategory, date });
         showEmotionMessage(getRandomEmotionMessage(type, category));
-
-        saveBillData();
         refreshUI();
-        
-        // 重置表单
+
         descInput.value = '';
         amountInput.value = '';
         dateInput.value = new Date().toISOString().split('T')[0];
@@ -810,8 +987,8 @@
     }
 
     // 更新账单
-    function updateBill() {
-        const id = parseInt(editBillId.value);
+    async function updateBill() {
+        const id = editBillId.value;
         const desc = editDesc.value.trim();
         const amount = parseFloat(editAmount.value);
         const category = editCategorySelect.value;
@@ -823,21 +1000,44 @@
         if (isNaN(amount) || amount <= 0) { showEmotionMessage('请输入有效金额'); return; }
         if (!date) { showEmotionMessage('请选择日期'); return; }
 
-        const index = bills.findIndex(b => b.id === id);
-        if (index !== -1) {
-            bills[index] = { ...bills[index], desc, amount, type, category, subCategory, date };
-            saveBillData();
-            refreshUI();
-            closeEditModal();
-            showEmotionMessage('🎉 账单更新成功！');
+        const updateData = mapToDB({ desc, amount, type, category, subCategory, date });
+
+        const { error } = await supabaseClient
+            .from('bills')
+            .update(updateData)
+            .eq('id', id);
+
+        if (error) {
+            console.error('更新账单失败:', error.message);
+            alert('更新账单失败: ' + error.message);
+            return;
         }
+
+        const index = bills.findIndex(b => String(b.id) === String(id));
+        if (index !== -1) {
+            bills[index] = { ...bills[index], id, desc, amount, type, category, subCategory, date };
+        }
+        refreshUI();
+        closeEditModal();
+        showEmotionMessage('🎉 账单更新成功！');
     }
 
     // 删除账单
-    function deleteBill(id) {
+    async function deleteBill(id) {
         if (!confirm('确定删除这条账单吗？')) return;
-        bills = bills.filter(b => b.id !== id);
-        saveBillData();
+
+        const { error } = await supabaseClient
+            .from('bills')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            console.error('删除账单失败:', error.message);
+            alert('删除账单失败: ' + error.message);
+            return;
+        }
+
+        bills = bills.filter(b => String(b.id) !== String(id));
         refreshUI();
         showEmotionMessage('🗑️ 账单已删除');
     }
@@ -1029,6 +1229,55 @@
         }
     });
 
+<<<<<<< HEAD
+    // 初始化（Auth + 数据加载）
+    async function init() {
+        // 绑定 Auth UI 事件
+        document.getElementById('signInBtn').addEventListener('click', signIn);
+        document.getElementById('signUpBtn').addEventListener('click', signUp);
+        document.getElementById('signOutBtn').addEventListener('click', signOut);
+
+        // 回车快捷登录
+        const pwdInput = document.getElementById('loginPassword');
+        pwdInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') signIn();
+        });
+
+        // 监听 Auth 状态变化
+        supabaseClient.auth.onAuthStateChange(async (event, session) => {
+            if (event === 'SIGNED_IN' && session) {
+                currentUser = session.user;
+                hideLoginOverlay();
+                showUserInfo(currentUser.email);
+                loadGameData();
+                await loadBillsFromSupabase();
+                refreshUI();
+            } else if (event === 'SIGNED_OUT') {
+                currentUser = null;
+                bills = [];
+                showLoginOverlay();
+                hideUserInfo();
+                refreshUI();
+            }
+        });
+
+        // 检查当前会话
+        const isLoggedIn = await checkAuth();
+        if (isLoggedIn) {
+            loadGameData();
+            await loadBillsFromSupabase();
+            refreshUI();
+        }
+
+        // 初始化游戏化 UI（始终可用）
+        renderHouseItems();
+        renderShopItems();
+        document.getElementById('catAffection').textContent = gameData.catAffection;
+        dateInput.value = new Date().toISOString().split('T')[0];
+    }
+
+    init();
+=======
     // 初始化
     loadData();
     refreshUI();
@@ -1036,6 +1285,7 @@
     renderShopItems();
     document.getElementById('catAffection').textContent = gameData.catAffection;
     dateInput.value = new Date().toISOString().split('T')[0];
+>>>>>>> a2f0d51378c6455138dbc083cc8ba7f9513602d1
 </script>
 </body>
 </html>
